@@ -1,0 +1,19 @@
+comfyui_config:
+  server_address: 172.27.208.1:8000
+  client_id: t2i_client
+workflow_config:
+  workflow_json_path: workflows/t2i_workflow.json
+  image_output_path: outputs/
+  default_prompts:
+    base_positive_prompt: "base_prompt"
+    environment_prompt: "environment_prompt"
+    negative_prompt: "negative_prompt"
+    batch_size: 10
+
+scenes:
+  - name: "sunset_beach"
+    positive_prompt: "A beautiful sunset at the beach with palm trees and vibrant colors."
+    negative_prompt: "blurry, low quality"
+  - name: "mountain_lake"
+    positive_prompt: "A serene mountain lake surrounded by pine trees and clear skies."
+    negative_prompt: "overexposed, noisy"
