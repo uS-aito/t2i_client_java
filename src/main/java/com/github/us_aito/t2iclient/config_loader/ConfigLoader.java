@@ -22,12 +22,12 @@ public class ConfigLoader {
       String testConfigPath = "./src/main/resources/sample_config.yaml";
       Config config = loadConfig(testConfigPath);
 
-      System.out.println("ComfyUI Server Address: " + config.comfyui_config().server_address());
-      System.out.println("Workflow JSON Path: " + config.workflow_config().workflow_json_path());
+      System.out.println("ComfyUI Server Address: " + config.comfyuiConfig().serverAddress());
+      System.out.println("Workflow JSON Path: " + config.workflowConfig().workflowJsonPath());
       config.scenes().forEach(scene -> {
         System.out.println("Scene Name: " + scene.name());
-        System.out.println("Positive Prompt: " + scene.positive_prompt());
-        System.out.println("Negative Prompt: " + scene.negative_prompt());
+        System.out.println("Positive Prompt: " + scene.positivePrompt());
+        System.out.println("Negative Prompt: " + scene.negativePrompt());
       });
 
     } catch (IOException e) {

@@ -53,20 +53,20 @@ public class Main {
 
     try {
       Config config = ConfigLoader.loadConfig(configPath);
-      Map<String, List<String>> library = LibraryLoader.loadLibrary(config.workflow_config().library_file_path());
-      ObjectNode workflow = WorkflowLoader.loadWorkflow(config.workflow_config().workflow_json_path());
+      Map<String, List<String>> library = LibraryLoader.loadLibrary(config.workflowConfig().libraryFilePath());
+      ObjectNode workflow = WorkflowLoader.loadWorkflow(config.workflowConfig().workflowJsonPath());
       Random random = new Random();
 
-      log.info("ComfyUI Server Address: {}",config.comfyui_config().server_address());
-      log.info("Workflow JSON Path: {}", config.workflow_config().workflow_json_path());
+      log.info("ComfyUI Server Address: {}", config.comfyuiConfig().serverAddress());
+      log.info("Workflow JSON Path: {}", config.workflowConfig().workflowJsonPath());
       config.scenes().forEach(scene -> {
         log.info("Scene Name: {}", scene.name());
-        log.info("Positive Prompt: {}", scene.positive_prompt());
-        log.info("Negative Prompt: {}", scene.negative_prompt());
+        log.info("Positive Prompt: {}", scene.positivePrompt());
+        log.info("Negative Prompt: {}", scene.negativePrompt());
       });
 
       client.newWebSocketBuilder()
-            .buildAsync(URI.create("ws://"+ config.comfyui_config().server_address() + "/ws?clientId=" + config.comfyui_config().client_id()), new WebSocket.Listener() {
+            .buildAsync(URI.create("ws://"+ config.comfyuiConfig().serverAddress() + "/ws?clientId=" + config.comfyuiConfig().clientId()), new WebSocket.Listener() {
                 @Override
                 public void onOpen(WebSocket webSocket) {
                     log.info("Connected to ComfyUI websocket server.");
@@ -100,9 +100,9 @@ public class Main {
                           if (rootNode.path("data").path("prompt_id").asText("").equals(promptId.get())
                               && !(rootNode.path("data").path("output").path("images").isEmpty())) {
                             for (JsonNode image : rootNode.path("data").path("output").path("images")) {
-                              Path savePath = Path.of(config.workflow_config().image_output_path(), sceneName.get() + "_" + imageCount.get() + ".png");
+                              Path savePath = Path.of(config.workflowConfig().imageOutputPath(), sceneName.get() + "_" + imageCount.get() + ".png");
                               try {
-                                workflowManager.getImage(config.comfyui_config().server_address(), 
+                                workflowManager.getImage(config.comfyuiConfig().serverAddress(), 
                                                         image.path("filename").asText(""),
                                                         savePath, 
                                                         image.path("type").asText(""),
@@ -163,11 +163,11 @@ public class Main {
             }).join();
 
       for (var scene : config.scenes()) {
-        String basePositivePrompt = scene.base_positive_prompt() != null ? scene.base_positive_prompt() : config.workflow_config().default_prompts().base_positive_prompt();
-        String environmentPrompt = scene.environment_prompt() != null ? scene.environment_prompt() : config.workflow_config().default_prompts().environment_prompt();
-        String positivePrompt = scene.positive_prompt() != null ? scene.positive_prompt() : config.workflow_config().default_prompts().positive_prompt();
-        String negativePrompt = scene.negative_prompt() != null ? scene.negative_prompt() : config.workflow_config().default_prompts().negative_prompt();
-        Integer batchSize = scene.batch_size() != null ? scene.batch_size() : config.workflow_config().default_prompts().batch_size();
+        String basePositivePrompt = scene.basePositivePrompt() != null ? scene.basePositivePrompt() : config.workflowConfig().defaultPrompts().basePositivePrompt();
+        String environmentPrompt = scene.environmentPrompt() != null ? scene.environmentPrompt() : config.workflowConfig().defaultPrompts().environmentPrompt();
+        String positivePrompt = scene.positivePrompt() != null ? scene.positivePrompt() : config.workflowConfig().defaultPrompts().positivePrompt();
+        String negativePrompt = scene.negativePrompt() != null ? scene.negativePrompt() : config.workflowConfig().defaultPrompts().negativePrompt();
+        Integer batchSize = scene.batchSize() != null ? scene.batchSize() : config.workflowConfig().defaultPrompts().batchSize();
         sceneName.set(scene.name());
 
         List<String> generatedPrompts = PromptGenerator.generatePrompts(positivePrompt, library, batchSize);
@@ -185,8 +185,8 @@ public class Main {
           log.debug("Sending prompt to ComfyUI: {}", fullPrompt);
           try {
             promptId.set(workflowManager.sendPrompt(
-              config.comfyui_config().server_address(),
-              config.comfyui_config().client_id(),
+              config.comfyuiConfig().serverAddress(),
+              config.comfyuiConfig().clientId(),
               objectMapper.convertValue(workflow, new TypeReference<Map<String, Object>>() {})
             ));
           } catch (IOException | InterruptedException e) {
