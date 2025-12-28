@@ -215,11 +215,6 @@ public class Main {
       log.error("Unexpected Error:", e);
       return;
     }
-    // config内のscenesの各シーンをforで回す
-    // 一つのシーンについて、batch_size回数だけ以下の処理を回す
-    // プロンプトのレンダリングを行う(libraryを参照する)
-    // comfyuiにリクエストを送信する
-    // イメージをダウンロードしてシーン名やバッチサイズをベースとするファイル名で保存する
   }
 
   private static String resolveConfigPath(String[] args) {
