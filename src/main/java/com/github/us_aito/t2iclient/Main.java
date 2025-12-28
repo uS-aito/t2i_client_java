@@ -176,12 +176,11 @@ public class Main {
         for (String prompt: generatedPrompts) {
           String fullPrompt = String.join(", ", basePositivePrompt, prompt);
           log.debug("Generated Prompt: {}", fullPrompt);
-          workflow.withObject("164").withObject("inputs").put("seed",random.nextLong(0,1125899906842624L));
-          workflow.withObject("22").withObject("inputs").put("batch_size", 1);
-          workflow.withObject("174").withObject("inputs").put("text", negativePrompt);
-          workflow.withObject("257").withObject("inputs").put("wildcard_text", fullPrompt);
-          workflow.withObject("303").withObject("inputs").put("text", environmentPrompt);
-
+          workflow.withObject(config.workflowConfig().seedNodeId().toString()).withObject("inputs").put("seed",random.nextLong(0,1125899906842624L));
+          workflow.withObject(config.workflowConfig().batchSizeNodeId().toString()).withObject("inputs").put("batch_size", 1);
+          workflow.withObject(config.workflowConfig().negativePromptNodeId().toString()).withObject("inputs").put("text", negativePrompt);
+          workflow.withObject(config.workflowConfig().positivePromptNodeId().toString()).withObject("inputs").put("wildcard_text", fullPrompt);
+          workflow.withObject(config.workflowConfig().environmentPromptNodeId().toString()).withObject("inputs").put("text", environmentPrompt);
           log.debug("Sending prompt to ComfyUI: {}", fullPrompt);
           try {
             promptId.set(workflowManager.sendPrompt(

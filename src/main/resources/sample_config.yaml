@@ -5,6 +5,11 @@ workflow_config:
   workflow_json_path: /Users/yu/Documents/ComfyUI/workflows/BasicT2I_V13_ADetailer_disabled_separated_environments_re.json
   image_output_path: /Users/yu/Documents/ComfyUI/output
   library_file_path: /Users/yu/Documents/ComfyUI/workflows/library.yaml
+  seed_node_id: 164
+  batch_size_node_id: 22
+  negative_prompt_node_id: 174
+  positive_prompt_node_id: 257
+  environment_prompt_node_id: 303
   default_prompts:
     base_positive_prompt: "base_prompt" # 各モデルで推奨されているペースプロンプト(masterpieceとか)
     environment_prompt: "environment_prompt" # 環境プロンプト(室内、屋外、昼、夜など)
