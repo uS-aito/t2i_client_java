@@ -19,7 +19,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # 2. Javaのセットアップ (バージョンは開発環境に合わせて変更してください)
+      # 2. Javaのセットアップ 
       - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
@@ -27,22 +27,22 @@ jobs:
           distribution: 'temurin'
           cache: 'maven'
 
-      # 3. Mavenでビルド (Fat JARの作成)
+      # 3. Mavenでビルド (Fat JARを作成)
       - name: Build with Maven
         run: mvn -B package --file pom.xml
+      
+      # 3.5. 不要な original jar を削除する
+      - name: Remove original jar
+        run: rm target/original-*.jar
 
       # 4. GitHub Releaseの作成とJARのアップロード
       - name: Create Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
         with:
-          # Maven Shade Pluginを使うと "original-" というファイルもできるので
-          # それを除外(!)しつつ、jarファイルをアップロード対象にする
           files: |
             target/*.jar
-            !target/original-*.jar
             
           # 下書き(Draft)として作成するかどうか。
-          # trueにしておくと、公開前にWeb画面で文章などを編集できるので安全です。
           draft: true
           prerelease: false
