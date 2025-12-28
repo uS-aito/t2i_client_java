@@ -42,15 +42,12 @@ public class PromptGenerator {
     for(int i = 0; i < count; i++) {
       String resultPrompt = prompt;
       for (String key : keys) {
-        try {
-          if (localLibrary.get(key).isEmpty()) {
-            // ライブラリの要素が尽きた場合は再度初期化する
-            localLibrary.put(key, new ArrayList<>(library.get(key)));
-          }
-        } catch (NullPointerException e) {
-          System.out.println("Error: Key '" + key + "' not found in library.");
-          System.out.println("Library Contents:" + library);
-          System.exit(1);
+        if (!localLibrary.containsKey(key)) {
+            throw new IllegalArgumentException("Key '" + key + "' not found in library. Libray keys are: " + library.keySet());
+        }
+        if (localLibrary.get(key).isEmpty()) {
+          // ライブラリの要素が尽きた場合は再度初期化する
+          localLibrary.put(key, new ArrayList<>(library.get(key)));
         }
         int index = new Random().nextInt(localLibrary.get(key).size());
         String value = localLibrary.get(key).get(index);

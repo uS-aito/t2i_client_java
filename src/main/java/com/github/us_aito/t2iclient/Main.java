@@ -2,6 +2,7 @@ package com.github.us_aito.t2iclient;
 
 import java.io.IOException;
 import java.lang.InterruptedException;
+import java.lang.IllegalArgumentException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
@@ -206,6 +207,9 @@ public class Main {
       return;
     } catch (InterruptedException e) {
       log.error("Unexpected Error:", e);
+      return;
+    } catch (IllegalArgumentException e) {
+      log.error("Unexpected Error", e.getMessage());
       return;
     } catch (Exception e) {
       log.error("Unexpected Error:", e);
