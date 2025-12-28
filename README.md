@@ -1,18 +1,38 @@
-## Getting Started
+# t2i_client_java
+ComfyUI client written in Java.
 
-Welcome to the VS Code Java world. Here is a guideline to help you get started to write Java code in Visual Studio Code.
+## How to run
+After creating `config.yaml`, give the config file path to args.
+```
+java -jar target/t2i_client-1.0.0.jar ./config.yaml
+```
 
-## Folder Structure
+## config file format
+```
+comfyui_config:
+  server_address: 192.168.10.109:8000
+  client_id: t2i_client
+workflow_config:
+  workflow_json_path: ./Documents/ComfyUI/workflows/BasicT2I_V13_ADetailer_disabled_separated_environments_re.json
+  image_output_path: ./Documents/ComfyUI/output
+  library_file_path: ./Documents/ComfyUI/workflows/library.yaml
+  default_prompts:
+    base_positive_prompt: "base_prompt" # 各モデルで推奨されているペースプロンプト(masterpieceとか)
+    environment_prompt: "environment_prompt" # 環境プロンプト(室内、屋外、昼、夜など)
+    positive_prompt: "positive_prompt"
+    negative_prompt: "negative_prompt"
+    batch_size: 10
 
-The workspace contains two folders by default, where:
-
-- `src`: the folder to maintain sources
-- `lib`: the folder to maintain dependencies
-
-Meanwhile, the compiled output files will be generated in the `bin` folder by default.
-
-> If you want to customize the folder structure, open `.vscode/settings.json` and update the related settings there.
-
-## Dependency Management
-
-The `JAVA PROJECTS` view allows you to manage your dependencies. More details can be found [here](https://github.com/microsoft/vscode-java-dependency#manage-dependencies).
+scenes:
+  # ベースポジティブプロンプト、ポジティブプロンプト、ネガティブプロンプト、環境プロンプト、バッチサイズ全て定義している例
+  - name: "sunset_beach" 
+    base_positive_prompt: "A beautiful sunset at the beach"
+    positive_prompt: "A beautiful sunset at the beach with <tree> trees and vibrant colors."
+    negative_prompt: "blurry, low quality"
+    environment_prompt: "tropical, warm"
+    batch_size: 1
+  # デフォルトのプロンプトを使用する例
+  - name: "mountain_lake"
+    positive_prompt: "A serene mountain lake surrounded by pine trees and clear skies."
+    negative_prompt: "overexposed, noisy"
+```
