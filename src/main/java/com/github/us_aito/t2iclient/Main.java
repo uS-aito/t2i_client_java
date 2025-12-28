@@ -71,8 +71,8 @@ public class Main {
                     WebSocket.Listener.super.onOpen(webSocket);
                 }
                 @Override
+                // メッセージ受信
                 public CompletionStage<?> onText(WebSocket webSocket, CharSequence data, boolean last) {
-                    // ★ここに受信時のビジネスロジックを書きます
                     log.debug("Received data: {}", data);
                     webSocketDataCache.set(webSocketDataCache.get() + data.toString());
 
@@ -138,7 +138,6 @@ public class Main {
                           log.info("  Node ID: {} Progress: {}/{}", rootNode.path("data").path("node").asText(), rootNode.path("data").path("value").asInt(), rootNode.path("data").path("max").asInt());
                           break;
                         default:
-                          // 知らないフォーマットや興味のないtypeは無視する
                           log.info("未対応または不明なtype: {}", type);
                           log.info("message: {}", webSocketDataCache.get());
                           break;
@@ -146,8 +145,6 @@ public class Main {
                       webSocketDataCache.set(""); 
                     }
 
-                    // ★重要: これを返すと「処理完了、次のメッセージ受付OK」の合図になります
-                    // 複雑なことをしない限り、この定型文でOKです
                     return WebSocket.Listener.super.onText(webSocket, data, last);
                 }
                 @Override
