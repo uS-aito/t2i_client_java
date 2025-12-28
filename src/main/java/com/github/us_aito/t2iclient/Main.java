@@ -7,10 +7,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.file.Path;
-import java.io.File;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Iterator;
@@ -36,7 +35,6 @@ import java.util.Random;
 @Slf4j
 public class Main {
   
-  private static final String DEV_CONFIG_PATH = "./src/main/resources/sample_config.yaml";
   public static void main(String[] args) {
     log.info("Starting T2I Client...");
 
@@ -45,11 +43,11 @@ public class Main {
     ObjectMapper objectMapper = new ObjectMapper();
     CountDownLatch latch = new CountDownLatch(1);
     HttpClient client = HttpClient.newHttpClient();
-    AtomicBoolean callingAPIFlag = new AtomicBoolean(false);
     AtomicReference<String> promptId = new AtomicReference<>("");
     AtomicReference<String> sceneName = new AtomicReference<>("");
     AtomicInteger imageCount = new AtomicInteger(0);
     AtomicReference<String> webSocketDataCache = new AtomicReference<>("");
+    AtomicReference<CompletableFuture<Void>> currentTask = new AtomicReference<>();
 
     try {
       Config config = ConfigLoader.loadConfig(configPath);
@@ -117,7 +115,10 @@ public class Main {
                           break;
                         case "execution_success":
                           log.info("Workflow execution succeeded.");
-                          callingAPIFlag.set(false);
+                          CompletableFuture<Void> f = currentTask.get();
+                          if (f != null){
+                            f.complete(null);
+                          }
                           break;
                         case "executing":
                           log.info("Current Node is: {}", rootNode.path("data").path("node").asText());
@@ -193,18 +194,15 @@ public class Main {
             return;
           }
           log.info("Received Prompt ID: {}", promptId.get());
-          callingAPIFlag.set(true);
-          while (callingAPIFlag.get()) {
-            Thread.sleep(1000);
-          }
+          CompletableFuture<Void> future = new CompletableFuture<>();
+          currentTask.set(new CompletableFuture<>());
+          future.join();
+
           imageCount.getAndIncrement();
         }
       };
 
     } catch (IOException e) {
-      log.error("Unexpected Error:", e);
-      return;
-    } catch (InterruptedException e) {
       log.error("Unexpected Error:", e);
       return;
     } catch (IllegalArgumentException e) {
@@ -218,15 +216,11 @@ public class Main {
 
   private static String resolveConfigPath(String[] args) {
     if (args.length > 0) {
-      log.info("Using config path from command line argument: {}", args[0]);
       return args[0];
     }
     
-    File devConfigFile = new File(DEV_CONFIG_PATH);
-    if (devConfigFile.exists()) {
-      log.info("Using default dev config path: {}", DEV_CONFIG_PATH);
-      return DEV_CONFIG_PATH;
-    }
+    System.err.println("Usage: java -jar t2i_client.jar <path_to_config.yaml>");
+    System.exit(1);
 
     return "";
   }

@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "name": "Debug (Launch)",
+      "request": "launch",
+      "mainClass": "com.github.us_aito.t2iclient.Main",
+      "projectName": "t2i_client",
+      "args": "./src/main/resources/sample_config.yaml"
+    }
+  ]
+}
