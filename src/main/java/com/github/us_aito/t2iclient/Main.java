@@ -203,7 +203,7 @@ public class Main {
       log.error("Unexpected Error:", e);
       return;
     } catch (IllegalArgumentException e) {
-      log.error("Unexpected Error", e.getMessage());
+      log.error("Unexpected Error", e);
       return;
     } catch (Exception e) {
       log.error("Unexpected Error:", e);
