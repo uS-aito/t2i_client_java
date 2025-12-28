@@ -192,7 +192,7 @@ public class Main {
           }
           log.info("Received Prompt ID: {}", promptId.get());
           CompletableFuture<Void> future = new CompletableFuture<>();
-          currentTask.set(new CompletableFuture<>());
+          currentTask.set(future);
           future.join();
 
           imageCount.getAndIncrement();
