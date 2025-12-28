@@ -68,6 +68,7 @@ class WorkflowManagerTest {
         // 「偽物のレスポンス(mockHttpResponse)の body() を呼んだら、
         //   偽物のPromptResponse(fakePromptResponse) を返す」ように設定
         when(mockHttpResponse.body()).thenReturn(fakePromptResponse);
+        when(mockHttpResponse.statusCode()).thenReturn(200);
 
         // 「偽物のクライアント(mockHttpClient)の send() が、
         //   「どんな HttpRequest でも」「どんな BodyHandler でも」呼び出されたら、

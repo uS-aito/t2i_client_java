@@ -16,7 +16,7 @@ import java.nio.file.StandardOpenOption;
 
 record Workflow(
   String client_id,
-  Object workflow_data
+  Object prompt
 ) {}
 
 @JsonIgnoreProperties(ignoreUnknown = true)
@@ -28,16 +28,16 @@ public class WorkflowManager {
   private final HttpClient httpClient;
   private final ObjectMapper objectMapper = new ObjectMapper();
 
-  public enum ImageType {
-    INPUT, OUTPUT, TEMP;
+  // public enum ImageType {
+  //   INPUT, OUTPUT, TEMP;
 
-    @Override
-    public String toString() {
-        return name().toLowerCase();
-    }
-  }
+  //   @Override
+  //   public String toString() {
+  //       return name().toLowerCase();
+  //   }
+  // }
   
-  WorkflowManager() {
+  public WorkflowManager() {
     this.httpClient = HttpClient.newHttpClient();
   }
   WorkflowManager(HttpClient httpClient) {
@@ -66,15 +66,18 @@ public class WorkflowManager {
         }
       )
     );
+    if (httpResponse.statusCode() != 200) {
+      throw new IOException("Failed to send prompt. Status code: " + httpResponse.statusCode());
+    }
     return httpResponse.body().prompt_id();
   }
 
-  public Path getImage(String serverAddress, String imageName, Path savePath, ImageType imageType, String subFolder) throws IOException, InterruptedException {
+  public Path getImage(String serverAddress, String imageName, Path savePath, String imageType, String subFolder) throws IOException, InterruptedException {
 
     URI baseUri = URI.create("http://" + serverAddress);
     String queryString = String.format("filename=%s&type=%s&subfolder=%s",
             URLEncoder.encode(imageName, StandardCharsets.UTF_8),
-            URLEncoder.encode(imageType.toString(), StandardCharsets.UTF_8), // imageTypeもエンコード推奨
+            URLEncoder.encode(imageType, StandardCharsets.UTF_8), // imageTypeもエンコード推奨
             URLEncoder.encode(subFolder, StandardCharsets.UTF_8)
     );
     
@@ -86,8 +89,8 @@ public class WorkflowManager {
       HttpResponse.BodyHandlers.ofFile(savePath, StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING));
 
     if (httpResponse.statusCode() != 200) {
-            throw new IOException("Failed to download image. Status code: " + httpResponse.statusCode());
-        }
+      throw new IOException("Failed to download image. Status code: " + httpResponse.statusCode());
+    }
 
     return httpResponse.body();
   }
