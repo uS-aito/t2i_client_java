@@ -23,6 +23,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.us_aito.t2iclient.config_loader.Config;
 import com.github.us_aito.t2iclient.config_loader.ConfigLoader;
+import com.github.us_aito.t2iclient.display.ProgressDisplay;
 import com.github.us_aito.t2iclient.library_loader.LibraryLoader;
 import com.github.us_aito.t2iclient.prompt_generator.PromptGenerator;
 import com.github.us_aito.t2iclient.workflow_manager.WorkflowManager;
@@ -48,9 +49,16 @@ public class Main {
     AtomicInteger imageCount = new AtomicInteger(0);
     AtomicReference<String> webSocketDataCache = new AtomicReference<>("");
     AtomicReference<CompletableFuture<Void>> currentTask = new AtomicReference<>();
+    final ProgressDisplay display = new ProgressDisplay();
 
     try {
       Config config = ConfigLoader.loadConfig(configPath);
+      display.start(
+          Path.of(configPath).getFileName().toString(),
+          config.comfyuiConfig().serverAddress(),
+          config.workflowConfig().imageOutputPath(),
+          config.scenes().size()
+      );
       Map<String, List<String>> library = LibraryLoader.loadLibrary(config.workflowConfig().libraryFilePath());
       ObjectNode workflow = WorkflowLoader.loadWorkflow(config.workflowConfig().workflowJsonPath());
       Random random = new Random();
@@ -100,21 +108,23 @@ public class Main {
                             for (JsonNode image : rootNode.path("data").path("output").path("images")) {
                               Path savePath = Path.of(config.workflowConfig().imageOutputPath(), sceneName.get() + "_" + imageCount.get() + ".png");
                               try {
-                                workflowManager.getImage(config.comfyuiConfig().serverAddress(), 
+                                workflowManager.getImage(config.comfyuiConfig().serverAddress(),
                                                         image.path("filename").asText(""),
-                                                        savePath, 
+                                                        savePath,
                                                         image.path("type").asText(""),
                                                         image.path("subfolder").asText(""));
                               } catch (IOException | InterruptedException e) {
                                 log.error("Unexpected Error:", e);
                               } finally {
                                 log.info("Image saved to: {}", savePath.toString());
+                                display.onImageSaved(savePath.getFileName().toString());
                               }
                             }
                           }
                           break;
                         case "execution_success":
                           log.info("Workflow execution succeeded.");
+                          display.onExecutionComplete();
                           CompletableFuture<Void> f = currentTask.get();
                           if (f != null){
                             f.complete(null);
@@ -122,6 +132,7 @@ public class Main {
                           break;
                         case "executing":
                           log.info("Current Node is: {}", rootNode.path("data").path("node").asText());
+                          display.onNodeExecuting(rootNode.path("data").path("node").asText());
                           break;
                         case "progress_state":
                           log.info("Progress State Report:");
@@ -136,6 +147,7 @@ public class Main {
                         case "progress":
                           log.info("Progress Report:");
                           log.info("  Node ID: {} Progress: {}/{}", rootNode.path("data").path("node").asText(), rootNode.path("data").path("value").asInt(), rootNode.path("data").path("max").asInt());
+                          display.onNodeProgress(rootNode.path("data").path("value").asInt(), rootNode.path("data").path("max").asInt());
                           break;
                         default:
                           log.info("未対応または不明なtype: {}", type);
@@ -160,20 +172,26 @@ public class Main {
                 }
             }).join();
 
+      int sceneIndex = 0;
       for (var scene : config.scenes()) {
+        sceneIndex++;
         String basePositivePrompt = scene.basePositivePrompt() != null ? scene.basePositivePrompt() : config.workflowConfig().defaultPrompts().basePositivePrompt();
         String environmentPrompt = scene.environmentPrompt() != null ? scene.environmentPrompt() : config.workflowConfig().defaultPrompts().environmentPrompt();
         String positivePrompt = scene.positivePrompt() != null ? scene.positivePrompt() : config.workflowConfig().defaultPrompts().positivePrompt();
         String negativePrompt = scene.negativePrompt() != null ? scene.negativePrompt() : config.workflowConfig().defaultPrompts().negativePrompt();
         Integer batchSize = scene.batchSize() != null ? scene.batchSize() : config.workflowConfig().defaultPrompts().batchSize();
         sceneName.set(scene.name());
+        display.startScene(scene.name(), sceneIndex, batchSize);
 
         List<String> generatedPrompts = PromptGenerator.generatePrompts(positivePrompt, library, batchSize);
         log.debug("Length of generated prompts: {}", generatedPrompts.size());
         imageCount.set(0);
+        int promptNumber = 0;
         for (String prompt: generatedPrompts) {
+          promptNumber++;
           String fullPrompt = String.join(", ", basePositivePrompt, prompt);
           log.debug("Generated Prompt: {}", fullPrompt);
+          display.startPrompt(promptNumber, fullPrompt);
           workflow.withObject(config.workflowConfig().seedNodeId().toString()).withObject("inputs").put("seed",random.nextLong(0,1125899906842624L));
           workflow.withObject(config.workflowConfig().batchSizeNodeId().toString()).withObject("inputs").put("batch_size", 1);
           workflow.withObject(config.workflowConfig().negativePromptNodeId().toString()).withObject("inputs").put("text", negativePrompt);
@@ -197,7 +215,9 @@ public class Main {
 
           imageCount.getAndIncrement();
         }
-      };
+        display.onSceneComplete();
+      }
+      display.stop();
 
     } catch (IOException e) {
       log.error("Unexpected Error:", e);
