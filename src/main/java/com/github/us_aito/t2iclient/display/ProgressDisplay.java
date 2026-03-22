@@ -54,6 +54,9 @@ public final class ProgressDisplay {
     ScheduledExecutorService scheduler;
     private final AtomicBoolean shutdownHookRegistered = new AtomicBoolean(false);
 
+    // 再開モード
+    volatile boolean resuming = false;
+
     // テスト用: render() の呼び出し回数
     volatile int renderCallCount = 0;
 
@@ -157,6 +160,17 @@ public final class ProgressDisplay {
     }
 
     /**
+     * 再開モードを設定する。
+     * true の場合、ダッシュボードのヘッダー行に [RESUME] ラベルを表示する。
+     * display.start() の直後に呼び出すことを想定している。
+     *
+     * @param resuming 再開モードを有効にする場合は true
+     */
+    public void setResuming(boolean resuming) {
+        this.resuming = resuming;
+    }
+
+    /**
      * 現在シーンの完了を通知する。
      * 全体進捗カウンタをインクリメントする。
      */
@@ -203,7 +217,7 @@ public final class ProgressDisplay {
             sb.append("\u001B[H");
 
             // ヘッダー
-            sb.append("=== t2i_client Progress Dashboard ===\u001B[K\n");
+            sb.append(buildHeader()).append("\u001B[K\n");
             sb.append("--------------------------------------\u001B[K\n");
 
             // 静的情報
@@ -360,6 +374,15 @@ public final class ProgressDisplay {
      */
     String buildResultsLine(String lastFilename, int totalImages) {
         return String.format("%s  (total: %d)", nvl(lastFilename), totalImages);
+    }
+
+    /**
+     * ダッシュボードのヘッダー行を生成する。
+     * 再開モードが有効な場合は [RESUME] ラベルを付加する。
+     */
+    String buildHeader() {
+        String base = "=== t2i_client Progress Dashboard ===";
+        return resuming ? base + " [RESUME]" : base;
     }
 
     /** null を空文字に変換するユーティリティ。 */

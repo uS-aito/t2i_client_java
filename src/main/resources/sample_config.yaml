@@ -1,5 +1,6 @@
 comfyui_config:
-  server_address: 192.168.10.101:8188
+  # server_address: 192.168.10.101:8188
+  server_address: 192.168.10.121:8000
   client_id: t2i_client
 workflow_config:
   workflow_json_path: /Users/yu/Documents/ComfyUI/workflows/BasicT2I_V13_ADetailer_disabled_separated_environments_re.json

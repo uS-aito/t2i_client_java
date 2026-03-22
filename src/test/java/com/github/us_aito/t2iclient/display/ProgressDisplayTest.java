@@ -513,4 +513,52 @@ class ProgressDisplayTest {
         // ファイル名が null の場合に例外が出ないこと
         assertDoesNotThrow(() -> display.buildResultsLine(null, 0));
     }
+
+    // ============================================================
+    // タスク 5: ProgressDisplay 再開モード表示
+    // ============================================================
+
+    @Test
+    void setResuming_false_headerDoesNotContainResumeLabel() {
+        display.start("config.yaml", "localhost:8188", "/output", 3);
+        display.setResuming(false);
+
+        StringBuilder sb = new StringBuilder();
+        // render() の出力をキャプチャする代わりに、ヘッダービルドロジックを直接検証
+        // resuming=false の場合、buildHeader() は [RESUME] を含まない
+        String header = display.buildHeader();
+        assertFalse(header.contains("[RESUME]"), "[RESUME] を含まないはず: " + header);
+
+        display.stop();
+    }
+
+    @Test
+    void setResuming_true_headerContainsResumeLabel() {
+        display.start("config.yaml", "localhost:8188", "/output", 3);
+        display.setResuming(true);
+
+        String header = display.buildHeader();
+        assertTrue(header.contains("[RESUME]"), "[RESUME] を含むはず: " + header);
+
+        display.stop();
+    }
+
+    @Test
+    void setResuming_defaultIsFalse() {
+        // start() 前はデフォルト false → [RESUME] ラベルなし
+        String header = display.buildHeader();
+        assertFalse(header.contains("[RESUME]"), "デフォルトは [RESUME] なしのはず: " + header);
+    }
+
+    @Test
+    void setResuming_canBeToggledAfterStart() {
+        display.start("config.yaml", "localhost:8188", "/output", 3);
+        display.setResuming(true);
+        assertTrue(display.buildHeader().contains("[RESUME]"));
+
+        display.setResuming(false);
+        assertFalse(display.buildHeader().contains("[RESUME]"));
+
+        display.stop();
+    }
 }
