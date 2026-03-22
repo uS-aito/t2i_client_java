@@ -7,6 +7,10 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
@@ -23,19 +27,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.us_aito.t2iclient.config_loader.Config;
 import com.github.us_aito.t2iclient.config_loader.ConfigLoader;
+import com.github.us_aito.t2iclient.config_loader.DefaultPrompts;
 import com.github.us_aito.t2iclient.display.ProgressDisplay;
 import com.github.us_aito.t2iclient.library_loader.LibraryLoader;
 import com.github.us_aito.t2iclient.prompt_generator.PromptGenerator;
+import com.github.us_aito.t2iclient.resume.DefaultPromptsSnapshot;
+import com.github.us_aito.t2iclient.resume.ResumeManager;
+import com.github.us_aito.t2iclient.resume.ResumeState;
+import com.github.us_aito.t2iclient.resume.SceneSnapshot;
 import com.github.us_aito.t2iclient.workflow_manager.WorkflowManager;
 import com.github.us_aito.t2iclient.workflow_loader.WorkflowLoader;
 
-import java.util.List;
-import java.util.Map;
-import java.util.Random;
-
 @Slf4j
 public class Main {
-  
+
   public static void main(String[] args) {
     log.info("Starting T2I Client...");
 
@@ -53,12 +58,27 @@ public class Main {
 
     try {
       Config config = ConfigLoader.loadConfig(configPath);
+
+      // --- 6.1: resume確認フロー（display.start()より前に実施）---
+      ResumeManager resumeManager = new ResumeManager();
+      Path resumePath = ResumeManager.getResumePath(configPath);
+      int startSceneIndex = resumeManager.checkAndPromptResume(
+          configPath,
+          config.scenes(),
+          config.workflowConfig().defaultPrompts(),
+          resumePath
+      );
+
       display.start(
           Path.of(configPath).getFileName().toString(),
           config.comfyuiConfig().serverAddress(),
           config.workflowConfig().imageOutputPath(),
           config.scenes().size()
       );
+
+      // --- 6.1: 再開モード表示 ---
+      display.setResuming(startSceneIndex > 0);
+
       Map<String, List<String>> library = LibraryLoader.loadLibrary(config.workflowConfig().libraryFilePath());
       ObjectNode workflow = WorkflowLoader.loadWorkflow(config.workflowConfig().workflowJsonPath());
       Random random = new Random();
@@ -70,6 +90,40 @@ public class Main {
         log.info("Positive Prompt: {}", scene.positivePrompt());
         log.info("Negative Prompt: {}", scene.negativePrompt());
       });
+
+      // --- 6.2: シャットダウンフック用のシーンインデックス追跡 ---
+      AtomicInteger currentSceneIndexForResume = new AtomicInteger(startSceneIndex);
+
+      // --- 6.2: シャットダウンフック登録（Ctrl+C時にresumeファイルを保存）---
+      Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        DefaultPrompts dp = config.workflowConfig().defaultPrompts();
+        DefaultPromptsSnapshot dps = dp != null
+            ? new DefaultPromptsSnapshot(
+                dp.basePositivePrompt(),
+                dp.positivePrompt(),
+                dp.negativePrompt(),
+                dp.environmentPrompt())
+            : new DefaultPromptsSnapshot(null, null, null, null);
+
+        List<SceneSnapshot> sceneSnapshots = config.scenes().stream()
+            .map(s -> new SceneSnapshot(
+                s.name(),
+                s.basePositivePrompt(),
+                s.positivePrompt(),
+                s.negativePrompt(),
+                s.environmentPrompt()))
+            .toList();
+
+        ResumeState state = new ResumeState(
+            1,
+            configPath,
+            LocalDateTime.now().toString(),
+            dps,
+            sceneSnapshots,
+            currentSceneIndexForResume.get()
+        );
+        resumeManager.save(state, resumePath);
+      }, "resume-shutdown"));
 
       client.newWebSocketBuilder()
             .buildAsync(URI.create("ws://"+ config.comfyuiConfig().serverAddress() + "/ws?clientId=" + config.comfyuiConfig().clientId()), new WebSocket.Listener() {
@@ -154,7 +208,7 @@ public class Main {
                           log.info("message: {}", webSocketDataCache.get());
                           break;
                       }
-                      webSocketDataCache.set(""); 
+                      webSocketDataCache.set("");
                     }
 
                     return WebSocket.Listener.super.onText(webSocket, data, last);
@@ -172,16 +226,19 @@ public class Main {
                 }
             }).join();
 
-      int sceneIndex = 0;
-      for (var scene : config.scenes()) {
-        sceneIndex++;
+      // --- 6.3: startSceneIndex からシーンループ開始 ---
+      for (int i = startSceneIndex; i < config.scenes().size(); i++) {
+        currentSceneIndexForResume.set(i);
+        var scene = config.scenes().get(i);
+        int displaySceneIndex = i + 1;  // 1-origin for display
+
         String basePositivePrompt = scene.basePositivePrompt() != null ? scene.basePositivePrompt() : config.workflowConfig().defaultPrompts().basePositivePrompt();
         String environmentPrompt = scene.environmentPrompt() != null ? scene.environmentPrompt() : config.workflowConfig().defaultPrompts().environmentPrompt();
         String positivePrompt = scene.positivePrompt() != null ? scene.positivePrompt() : config.workflowConfig().defaultPrompts().positivePrompt();
         String negativePrompt = scene.negativePrompt() != null ? scene.negativePrompt() : config.workflowConfig().defaultPrompts().negativePrompt();
         Integer batchSize = scene.batchSize() != null ? scene.batchSize() : config.workflowConfig().defaultPrompts().batchSize();
         sceneName.set(scene.name());
-        display.startScene(scene.name(), sceneIndex, batchSize);
+        display.startScene(scene.name(), displaySceneIndex, batchSize);
 
         List<String> generatedPrompts = PromptGenerator.generatePrompts(positivePrompt, library, batchSize);
         log.debug("Length of generated prompts: {}", generatedPrompts.size());
@@ -217,6 +274,9 @@ public class Main {
         }
         display.onSceneComplete();
       }
+
+      // --- 6.3: 全シーン完了後にresumeファイルを削除 ---
+      resumeManager.delete(resumePath);
       display.stop();
 
     } catch (IOException e) {
@@ -235,7 +295,7 @@ public class Main {
     if (args.length > 0) {
       return args[0];
     }
-    
+
     System.err.println("Usage: java -jar t2i_client.jar <path_to_config.yaml>");
     System.exit(1);
 

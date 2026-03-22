@@ -50,3 +50,6 @@ buildNumber.properties
 .DS_Store
 .AppleDouble
 .LSOverride
+
+# Ignore resume files
+*.resume.json
