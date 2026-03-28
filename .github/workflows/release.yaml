@@ -54,5 +54,5 @@ jobs:
             target/*.jar
             
           # 下書き(Draft)として作成するかどうか。
-          draft: true
+          draft: false
           prerelease: false
