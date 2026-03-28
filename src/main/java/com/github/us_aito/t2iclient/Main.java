@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.lang.InterruptedException;
 import java.lang.IllegalArgumentException;
 import java.net.URI;
+import java.nio.file.Files;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
 import java.nio.file.Path;
@@ -160,18 +161,19 @@ public class Main {
                           if (rootNode.path("data").path("prompt_id").asText("").equals(promptId.get())
                               && !(rootNode.path("data").path("output").path("images").isEmpty())) {
                             for (JsonNode image : rootNode.path("data").path("output").path("images")) {
-                              Path savePath = Path.of(config.workflowConfig().imageOutputPath(), sceneName.get() + "_" + imageCount.get() + ".png");
+                              Path outputDir = Path.of(config.workflowConfig().imageOutputPath());
+                              Path savePath = outputDir.resolve(sceneName.get() + "_" + imageCount.get() + ".png");
                               try {
+                                Files.createDirectories(outputDir);
                                 workflowManager.getImage(config.comfyuiConfig().serverAddress(),
                                                         image.path("filename").asText(""),
                                                         savePath,
                                                         image.path("type").asText(""),
                                                         image.path("subfolder").asText(""));
-                              } catch (IOException | InterruptedException e) {
-                                log.error("Unexpected Error:", e);
-                              } finally {
                                 log.info("Image saved to: {}", savePath.toString());
                                 display.onImageSaved(savePath.getFileName().toString());
+                              } catch (IOException | InterruptedException e) {
+                                log.error("Failed to download image: {}", savePath, e);
                               }
                             }
                           }
