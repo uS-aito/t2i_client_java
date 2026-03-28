@@ -26,6 +26,16 @@ jobs:
           java-version: '21'
           distribution: 'temurin'
           cache: 'maven'
+      
+      - name: Update version in pom.xml
+        run: |
+          # GITHUB_REF_NAME には "v1.2.0" などのタグ名が入ります。
+          # 先頭の "v" を取り除いて "1.2.0" という文字列にします。
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "Setting pom.xml version to: $VERSION"
+          
+          # Mavenのコマンドを使ってpom.xmlのバージョンを書き換えます
+          mvn versions:set -DnewVersion=$VERSION
 
       # 3. Mavenでビルド (Fat JARを作成)
       - name: Build with Maven
