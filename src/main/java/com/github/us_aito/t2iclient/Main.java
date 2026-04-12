@@ -15,6 +15,7 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.Iterator;
@@ -55,6 +56,7 @@ public class Main {
     AtomicInteger imageCount = new AtomicInteger(0);
     AtomicReference<String> webSocketDataCache = new AtomicReference<>("");
     AtomicReference<CompletableFuture<Void>> currentTask = new AtomicReference<>();
+    AtomicBoolean isSuccessfullyCompleted = new AtomicBoolean(false);
     final ProgressDisplay display = new ProgressDisplay();
 
     try {
@@ -97,6 +99,9 @@ public class Main {
 
       // --- 6.2: シャットダウンフック登録（Ctrl+C時にresumeファイルを保存）---
       Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+        if (isSuccessfullyCompleted.get()) {
+          return;
+        }
         DefaultPrompts dp = config.workflowConfig().defaultPrompts();
         DefaultPromptsSnapshot dps = dp != null
             ? new DefaultPromptsSnapshot(
@@ -280,6 +285,7 @@ public class Main {
       }
 
       // --- 6.3: 全シーン完了後にresumeファイルを削除 ---
+      isSuccessfullyCompleted.set(true);
       resumeManager.delete(resumePath);
       display.stop();
 
