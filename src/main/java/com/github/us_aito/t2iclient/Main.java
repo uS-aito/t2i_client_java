@@ -164,7 +164,9 @@ public class Main {
                               Path outputDir = Path.of(config.workflowConfig().imageOutputPath());
                               Path savePath = outputDir.resolve(sceneName.get() + "_" + imageCount.get() + ".png");
                               try {
+                                log.debug("Creating output directory if it doesn't exist: {}", outputDir.toString());
                                 Files.createDirectories(outputDir);
+                                log.debug("Starting image download from ComfyUI server for: {}", savePath.toString());
                                 workflowManager.getImage(config.comfyuiConfig().serverAddress(),
                                                         image.path("filename").asText(""),
                                                         savePath,
@@ -223,7 +225,7 @@ public class Main {
                 }
                 @Override
                 public void onError(WebSocket webSocket, Throwable error) {
-                    System.err.println("Error occurred on websocket: " + error.getMessage());
+                    log.error("Error occurred on websocket:", error);
                     latch.countDown();
                 }
             }).join();

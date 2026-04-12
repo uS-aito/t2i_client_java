@@ -1,6 +1,6 @@
 <configuration>
 
-    <timestamp key="date" datePAttern="yyyyMMdd" />
+    <timestamp key="date" datePattern="yyyyMMdd" />
 
     <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
         <encoder>
