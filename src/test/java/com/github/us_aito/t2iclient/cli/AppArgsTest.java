@@ -14,6 +14,7 @@ class AppArgsTest {
         assertEquals(AppArgs.AppMode.FILE, result.mode());
         assertEquals("config.yaml", result.configPath());
         assertNull(result.sqsQueueUrl());
+        assertNull(result.s3DestinationUri());
     }
 
     @Test
@@ -25,6 +26,7 @@ class AppArgsTest {
         assertEquals(AppArgs.AppMode.CLIENT, result.mode());
         assertEquals("config.yaml", result.configPath());
         assertEquals("https://sqs.ap-northeast-1.amazonaws.com/123456789/my-queue", result.sqsQueueUrl());
+        assertNull(result.s3DestinationUri());
     }
 
     @Test
@@ -38,14 +40,18 @@ class AppArgsTest {
     }
 
     @Test
-    void parse_serverFlag_returnsServerMode() {
-        AppArgs result = AppArgs.parse(new String[]{"--server", "config.yaml"});
+    void parse_serverWithSqsAndS3_returnsServerMode() {
+        AppArgs result = AppArgs.parse(new String[]{
+            "--server", "--sqs", "https://sqs.ap-northeast-1.amazonaws.com/123/q", "--s3", "s3://my-bucket/results"
+        });
 
         assertEquals(AppArgs.AppMode.SERVER, result.mode());
-        assertEquals("config.yaml", result.configPath());
+        assertNull(result.configPath());
+        assertEquals("https://sqs.ap-northeast-1.amazonaws.com/123/q", result.sqsQueueUrl());
+        assertEquals("s3://my-bucket/results", result.s3DestinationUri());
     }
 
-    // --- 失敗ケース ---
+    // --- 失敗ケース: 既存 ---
 
     @Test
     void parse_clientWithoutSqs_throws() {
@@ -90,5 +96,55 @@ class AppArgsTest {
             () -> AppArgs.parse(new String[]{})
         );
         assertNotNull(ex.getMessage());
+    }
+
+    // --- 失敗ケース: SERVER モード ---
+
+    @Test
+    void parse_serverWithoutSqs_throws() {
+        AppArgs.InvalidArgumentException ex = assertThrows(
+            AppArgs.InvalidArgumentException.class,
+            () -> AppArgs.parse(new String[]{"--server", "--s3", "s3://my-bucket"})
+        );
+        assertTrue(ex.getMessage().contains("--sqs"));
+    }
+
+    @Test
+    void parse_serverWithoutS3_throws() {
+        AppArgs.InvalidArgumentException ex = assertThrows(
+            AppArgs.InvalidArgumentException.class,
+            () -> AppArgs.parse(new String[]{"--server", "--sqs", "https://sqs.ap-northeast-1.amazonaws.com/123/q"})
+        );
+        assertTrue(ex.getMessage().contains("--s3"));
+    }
+
+    @Test
+    void parse_serverWithConfigPath_throws() {
+        AppArgs.InvalidArgumentException ex = assertThrows(
+            AppArgs.InvalidArgumentException.class,
+            () -> AppArgs.parse(new String[]{
+                "--server", "--sqs", "https://sqs.ap-northeast-1.amazonaws.com/123/q",
+                "--s3", "s3://my-bucket", "config.yaml"
+            })
+        );
+        assertTrue(ex.getMessage().contains("config"));
+    }
+
+    @Test
+    void parse_serverAndClientTogether_throws() {
+        AppArgs.InvalidArgumentException ex = assertThrows(
+            AppArgs.InvalidArgumentException.class,
+            () -> AppArgs.parse(new String[]{"--client", "--server", "--sqs", "url", "--s3", "s3://b"})
+        );
+        assertTrue(ex.getMessage().contains("--client") || ex.getMessage().contains("--server"));
+    }
+
+    @Test
+    void parse_s3WithoutServer_throws() {
+        AppArgs.InvalidArgumentException ex = assertThrows(
+            AppArgs.InvalidArgumentException.class,
+            () -> AppArgs.parse(new String[]{"--s3", "s3://my-bucket", "config.yaml"})
+        );
+        assertTrue(ex.getMessage().contains("--s3"));
     }
 }

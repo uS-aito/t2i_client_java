@@ -54,7 +54,7 @@ public class Main {
       appArgs = AppArgs.parse(args);
     } catch (AppArgs.InvalidArgumentException e) {
       System.err.println("Error: " + e.getMessage());
-      System.err.println("Usage: java -jar t2i_client.jar [--client --sqs <queueUrl>] <path_to_config.yaml>");
+      System.err.println("Usage: java -jar t2i_client.jar [--client --sqs <url> | --server --sqs <url> --s3 <s3Uri>] [<path_to_config.yaml>]");
       System.exit(2);
       return;
     }
@@ -66,8 +66,8 @@ public class Main {
     }
 
     if (appArgs.mode() == AppArgs.AppMode.SERVER) {
-      System.err.println("Server mode is not yet implemented.");
-      System.exit(2);
+      int code = new com.github.us_aito.t2iclient.server_mode.ServerRunner().run(appArgs).numeric();
+      System.exit(code);
       return;
     }
 

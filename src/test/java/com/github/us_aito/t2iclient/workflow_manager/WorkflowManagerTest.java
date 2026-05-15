@@ -1,95 +1,59 @@
 package com.github.us_aito.t2iclient.workflow_manager;
 
-// JUnit (テスト用) のインポート
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
-// Mockito (モック用) のインポート
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import static org.mockito.Mockito.*;
 
-// Java標準のインポート
 import java.io.IOException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
 import java.util.Map;
-
-// ★重要：テスト対象クラスと同じパッケージなので、
-// パッケージプライベートの record やコンストラクタにアクセスできる
-// (WorkflowManager.java をインポートする必要はない)
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 
 class WorkflowManagerTest {
 
-    // --- 準備 (Arrange) ---
-
-    // @Mock アノテーションが「偽物の HttpClient」を自動で作成する
     @Mock
     private HttpClient mockHttpClient;
 
-    // @Mock アノテーションが「偽物の HttpResponse」を作成する
-    // (PromptResponse はパッケージプライベートなので、<PromptResponse> と書ける)
     @Mock
     private HttpResponse<PromptResponse> mockHttpResponse;
 
-    // テスト対象のクラス
+    @Mock
+    private HttpResponse<byte[]> mockByteResponse;
+
     private WorkflowManager workflowManager;
 
-    // 各テストが実行される「前」に、毎回このメソッドが呼ばれる
     @BeforeEach
     void setUp() {
-        // Mockito のアノテーションを初期化
         MockitoAnnotations.openMocks(this);
-        
-        // ★★★ ここが最重要 ★★★
-        // new WorkflowManager() ではなく、偽物の `mockHttpClient` を注入する
         workflowManager = new WorkflowManager(mockHttpClient);
     }
 
-    // --- テストケース ---
+    // --- 既存テスト ---
 
-    @Test // これがテストメソッドであることを示す
+    @Test
     void testSendPrompt_Success() throws IOException, InterruptedException {
-        
-        // --- 1. 「偽物の設定」 (Arrange) ---
-        
-        // テスト用のダミーデータ
         String testServer = "localhost:8080";
         String testClientId = "test-client";
         Map<String, Object> testData = Map.of("node", "test_value");
         String expectedPromptId = "mock-prompt-id-123";
 
-        // `PromptResponse` は record なので new で普通に作れる
         PromptResponse fakePromptResponse = new PromptResponse(expectedPromptId);
-
-        // 「偽物のレスポンス(mockHttpResponse)の body() を呼んだら、
-        //   偽物のPromptResponse(fakePromptResponse) を返す」ように設定
         when(mockHttpResponse.body()).thenReturn(fakePromptResponse);
         when(mockHttpResponse.statusCode()).thenReturn(200);
-
-        // 「偽物のクライアント(mockHttpClient)の send() が、
-        //   「どんな HttpRequest でも」「どんな BodyHandler でも」呼び出されたら、
-        //   上で設定した「偽物のレスポンス(mockHttpResponse)」を返す」
-        //   ように設定
         when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
             .thenReturn(mockHttpResponse);
 
-        // --- 2. テスト対象の実行 (Act) ---
         String actualPromptId = workflowManager.sendPrompt(testServer, testClientId, testData);
-
-        // --- 3. 結果の検証 (Assert) ---
-        
-        // 戻り値(actualPromptId)が、期待した値(expectedPromptId)と一致するか検証
         assertEquals(expectedPromptId, actualPromptId);
-
-        // (おまけ) ちゃんと mockHttpClient の send が1回だけ呼ばれたか検証
         verify(mockHttpClient, times(1)).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
     }
 
@@ -132,5 +96,81 @@ class WorkflowManagerTest {
 
         String actualPromptId = workflowManager.sendPrompt(testServer, testClientId, testData);
         assertEquals(expectedPromptId, actualPromptId);
+    }
+
+    // --- 新規: sendPrompt(serverAddress, rawBody) オーバーロード ---
+
+    @Test
+    void sendPrompt_rawBody_sendsBodyAsIs() throws IOException, InterruptedException {
+        String rawBody = "{\"client_id\":\"c1\",\"prompt\":{}}";
+        String expectedPromptId = "raw-prompt-id";
+
+        PromptResponse fakePromptResponse = new PromptResponse(expectedPromptId);
+        when(mockHttpResponse.body()).thenReturn(fakePromptResponse);
+        when(mockHttpResponse.statusCode()).thenReturn(200);
+        when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+            .thenReturn(mockHttpResponse);
+
+        String actualPromptId = workflowManager.sendPrompt("localhost:8188", rawBody);
+
+        assertEquals(expectedPromptId, actualPromptId);
+        verify(mockHttpClient, times(1)).send(
+            argThat(req -> {
+                // BodyPublisher からボディ文字列を確認（間接的にリクエストが1回送信されたことを検証）
+                return req.uri().toString().contains("/prompt");
+            }),
+            any(HttpResponse.BodyHandler.class)
+        );
+    }
+
+    @Test
+    void sendPrompt_rawBody_returnsPromptId() throws IOException, InterruptedException {
+        String rawBody = "{\"client_id\":\"c2\",\"prompt\":{\"1\":{}}}";
+        PromptResponse fakePromptResponse = new PromptResponse("pid-999");
+        when(mockHttpResponse.body()).thenReturn(fakePromptResponse);
+        when(mockHttpResponse.statusCode()).thenReturn(200);
+        when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+            .thenReturn(mockHttpResponse);
+
+        String result = workflowManager.sendPrompt("localhost:8188", rawBody);
+        assertEquals("pid-999", result);
+    }
+
+    // --- 新規: fetchImage ---
+
+    @Test
+    void fetchImage_returnsBytes_noFileCreated() throws IOException, InterruptedException {
+        byte[] expected = new byte[]{1, 2, 3, 4, 5};
+        when(mockByteResponse.body()).thenReturn(expected);
+        when(mockByteResponse.statusCode()).thenReturn(200);
+        when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+            .thenReturn(mockByteResponse);
+
+        byte[] result = workflowManager.fetchImage("localhost:8188", "img.png", "output", "");
+
+        assertArrayEquals(expected, result);
+        // ローカルファイルは作らない（Pathベースのハンドラを使っていないことを検証）
+        verify(mockHttpClient, times(1)).send(
+            argThat(req -> req.uri().toString().contains("/view")),
+            any(HttpResponse.BodyHandler.class)
+        );
+    }
+
+    @Test
+    void fetchImage_uriContainsFilenameAndType() throws IOException, InterruptedException {
+        when(mockByteResponse.body()).thenReturn(new byte[0]);
+        when(mockByteResponse.statusCode()).thenReturn(200);
+        when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+            .thenReturn(mockByteResponse);
+
+        workflowManager.fetchImage("localhost:8188", "my-image.png", "output", "subfolder1");
+
+        verify(mockHttpClient).send(
+            argThat(req -> {
+                String uri = req.uri().toString();
+                return uri.contains("my-image.png") && uri.contains("output") && uri.contains("subfolder1");
+            }),
+            any(HttpResponse.BodyHandler.class)
+        );
     }
 }
