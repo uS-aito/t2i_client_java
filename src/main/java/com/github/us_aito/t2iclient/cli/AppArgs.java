@@ -6,7 +6,8 @@ import java.util.List;
 public record AppArgs(
         AppMode mode,
         String configPath,
-        String sqsQueueUrl
+        String sqsQueueUrl,
+        String s3DestinationUri
 ) {
     public enum AppMode { FILE, CLIENT, SERVER }
 
@@ -20,6 +21,7 @@ public record AppArgs(
         boolean clientFlag = false;
         boolean serverFlag = false;
         String sqsQueueUrl = null;
+        String s3DestinationUri = null;
         List<String> positional = new ArrayList<>();
 
         for (int i = 0; i < rawArgs.length; i++) {
@@ -32,6 +34,12 @@ public record AppArgs(
                         throw new InvalidArgumentException("--sqs requires a value");
                     }
                     sqsQueueUrl = rawArgs[++i];
+                }
+                case "--s3" -> {
+                    if (i + 1 >= rawArgs.length) {
+                        throw new InvalidArgumentException("--s3 requires a value");
+                    }
+                    s3DestinationUri = rawArgs[++i];
                 }
                 default -> {
                     if (arg.startsWith("--")) {
@@ -46,6 +54,23 @@ public record AppArgs(
             throw new InvalidArgumentException("--client and --server are mutually exclusive");
         }
 
+        if (s3DestinationUri != null && !serverFlag) {
+            throw new InvalidArgumentException("--s3 is only valid with --server");
+        }
+
+        if (serverFlag) {
+            if (sqsQueueUrl == null) {
+                throw new InvalidArgumentException("--sqs is required when --server is specified");
+            }
+            if (s3DestinationUri == null) {
+                throw new InvalidArgumentException("--s3 is required when --server is specified");
+            }
+            if (!positional.isEmpty()) {
+                throw new InvalidArgumentException("config path must not be specified with --server");
+            }
+            return new AppArgs(AppMode.SERVER, null, sqsQueueUrl, s3DestinationUri);
+        }
+
         if (positional.isEmpty()) {
             throw new InvalidArgumentException("config path is required");
         }
@@ -55,13 +80,9 @@ public record AppArgs(
             if (sqsQueueUrl == null) {
                 throw new InvalidArgumentException("--sqs is required when --client is specified");
             }
-            return new AppArgs(AppMode.CLIENT, configPath, sqsQueueUrl);
+            return new AppArgs(AppMode.CLIENT, configPath, sqsQueueUrl, null);
         }
 
-        if (serverFlag) {
-            return new AppArgs(AppMode.SERVER, configPath, null);
-        }
-
-        return new AppArgs(AppMode.FILE, configPath, null);
+        return new AppArgs(AppMode.FILE, configPath, null, null);
     }
 }

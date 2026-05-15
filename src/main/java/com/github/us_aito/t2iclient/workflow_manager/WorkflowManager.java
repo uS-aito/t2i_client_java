@@ -75,6 +75,51 @@ public class WorkflowManager {
     return httpResponse.body().prompt_id();
   }
 
+  public String sendPrompt(String serverAddress, String rawBody) throws IOException, InterruptedException {
+    HttpRequest httpRequest = HttpRequest.newBuilder(URI.create("http://" + serverAddress).resolve("/prompt"))
+      .header("Content-Type", "application/json")
+      .POST(HttpRequest.BodyPublishers.ofString(rawBody))
+      .build();
+
+    HttpResponse<PromptResponse> httpResponse = httpClient.send(httpRequest, responseInfo ->
+      HttpResponse.BodySubscribers.mapping(
+        HttpResponse.BodySubscribers.ofString(StandardCharsets.UTF_8),
+        (String body) -> {
+          try {
+            return objectMapper.readValue(body, PromptResponse.class);
+          } catch (IOException e) {
+            throw new UncheckedIOException(e);
+          }
+        }
+      )
+    );
+    if (httpResponse.statusCode() != 200) {
+      throw new IOException("Failed to send prompt. Status code: " + httpResponse.statusCode());
+    }
+    return httpResponse.body().prompt_id();
+  }
+
+  public byte[] fetchImage(String serverAddress, String imageName, String imageType, String subFolder) throws IOException, InterruptedException {
+    URI baseUri = URI.create("http://" + serverAddress);
+    String queryString = String.format("filename=%s&type=%s&subfolder=%s",
+            URLEncoder.encode(imageName, StandardCharsets.UTF_8),
+            URLEncoder.encode(imageType, StandardCharsets.UTF_8),
+            URLEncoder.encode(subFolder, StandardCharsets.UTF_8)
+    );
+
+    HttpRequest httpRequest = HttpRequest.newBuilder(baseUri.resolve("/view?" + queryString))
+      .GET()
+      .build();
+
+    HttpResponse<byte[]> httpResponse = httpClient.send(httpRequest,
+      HttpResponse.BodyHandlers.ofByteArray());
+
+    if (httpResponse.statusCode() != 200) {
+      throw new IOException("Failed to fetch image. Status code: " + httpResponse.statusCode());
+    }
+    return httpResponse.body();
+  }
+
   public Path getImage(String serverAddress, String imageName, Path savePath, String imageType, String subFolder) throws IOException, InterruptedException {
 
     URI baseUri = URI.create("http://" + serverAddress);
