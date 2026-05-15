@@ -4,6 +4,7 @@ package com.github.us_aito.t2iclient.workflow_manager;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 // Mockito (モック用) のインポート
 import org.mockito.InjectMocks;
@@ -21,6 +22,9 @@ import java.util.Map;
 // ★重要：テスト対象クラスと同じパッケージなので、
 // パッケージプライベートの record やコンストラクタにアクセスできる
 // (WorkflowManager.java をインポートする必要はない)
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
 
 class WorkflowManagerTest {
 
@@ -87,5 +91,46 @@ class WorkflowManagerTest {
 
         // (おまけ) ちゃんと mockHttpClient の send が1回だけ呼ばれたか検証
         verify(mockHttpClient, times(1)).send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class));
+    }
+
+    @Test
+    void testBuildPromptBody_returnsExpectedJson() throws Exception {
+        String clientId = "my-client";
+        Map<String, Object> workflowData = Map.of("node1", Map.of("inputs", Map.of("text", "hello")));
+
+        String json = workflowManager.buildPromptBody(clientId, workflowData);
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(json);
+        assertEquals("my-client", root.get("client_id").asText());
+        assertEquals("hello", root.path("prompt").path("node1").path("inputs").path("text").asText());
+    }
+
+    @Test
+    void testBuildPromptBody_withNullClientId() throws Exception {
+        Map<String, Object> workflowData = Map.of("node1", "val");
+
+        String json = workflowManager.buildPromptBody(null, workflowData);
+
+        ObjectMapper mapper = new ObjectMapper();
+        JsonNode root = mapper.readTree(json);
+        assertTrue(root.get("client_id").isNull());
+    }
+
+    @Test
+    void testSendPrompt_usesBuildPromptBodyInternally() throws IOException, InterruptedException {
+        String testServer = "localhost:8080";
+        String testClientId = "test-client";
+        Map<String, Object> testData = Map.of("node", "test_value");
+        String expectedPromptId = "mock-prompt-id-456";
+
+        PromptResponse fakePromptResponse = new PromptResponse(expectedPromptId);
+        when(mockHttpResponse.body()).thenReturn(fakePromptResponse);
+        when(mockHttpResponse.statusCode()).thenReturn(200);
+        when(mockHttpClient.send(any(HttpRequest.class), any(HttpResponse.BodyHandler.class)))
+            .thenReturn(mockHttpResponse);
+
+        String actualPromptId = workflowManager.sendPrompt(testServer, testClientId, testData);
+        assertEquals(expectedPromptId, actualPromptId);
     }
 }
