@@ -27,6 +27,9 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.github.us_aito.t2iclient.cli.AppArgs;
+import com.github.us_aito.t2iclient.client_mode.ClientRunner;
+import com.github.us_aito.t2iclient.prompt_generator.WorkflowPatcher;
 import com.github.us_aito.t2iclient.config_loader.Config;
 import com.github.us_aito.t2iclient.config_loader.ConfigLoader;
 import com.github.us_aito.t2iclient.config_loader.DefaultPrompts;
@@ -46,7 +49,29 @@ public class Main {
   public static void main(String[] args) {
     log.info("Starting T2I Client...");
 
-    String configPath = resolveConfigPath(args);
+    AppArgs appArgs;
+    try {
+      appArgs = AppArgs.parse(args);
+    } catch (AppArgs.InvalidArgumentException e) {
+      System.err.println("Error: " + e.getMessage());
+      System.err.println("Usage: java -jar t2i_client.jar [--client --sqs <queueUrl>] <path_to_config.yaml>");
+      System.exit(2);
+      return;
+    }
+
+    if (appArgs.mode() == AppArgs.AppMode.CLIENT) {
+      ClientRunner.ExitCode code = new ClientRunner().run(appArgs.configPath(), appArgs.sqsQueueUrl());
+      System.exit(code.numeric());
+      return;
+    }
+
+    if (appArgs.mode() == AppArgs.AppMode.SERVER) {
+      System.err.println("Server mode is not yet implemented.");
+      System.exit(2);
+      return;
+    }
+
+    String configPath = appArgs.configPath();
     WorkflowManager workflowManager = new WorkflowManager();
     ObjectMapper objectMapper = new ObjectMapper();
     CountDownLatch latch = new CountDownLatch(1);
@@ -258,11 +283,14 @@ public class Main {
           String fullPrompt = String.join(", ", basePositivePrompt, prompt);
           log.debug("Generated Prompt: {}", fullPrompt);
           display.startPrompt(promptNumber, fullPrompt);
-          workflow.withObject(config.workflowConfig().seedNodeId().toString()).withObject("inputs").put("seed",random.nextLong(0,1125899906842624L));
-          workflow.withObject(config.workflowConfig().batchSizeNodeId().toString()).withObject("inputs").put("batch_size", 1);
-          workflow.withObject(config.workflowConfig().negativePromptNodeId().toString()).withObject("inputs").put("text", negativePrompt);
-          workflow.withObject(config.workflowConfig().positivePromptNodeId().toString()).withObject("inputs").put("wildcard_text", fullPrompt);
-          workflow.withObject(config.workflowConfig().environmentPromptNodeId().toString()).withObject("inputs").put("text", environmentPrompt);
+          WorkflowPatcher.applyScenePrompts(
+            workflow,
+            config.workflowConfig(),
+            fullPrompt,
+            negativePrompt,
+            environmentPrompt,
+            random.nextLong(0, 1125899906842624L)
+          );
           log.debug("Sending prompt to ComfyUI: {}", fullPrompt);
           try {
             promptId.set(workflowManager.sendPrompt(
@@ -301,14 +329,4 @@ public class Main {
     }
   }
 
-  private static String resolveConfigPath(String[] args) {
-    if (args.length > 0) {
-      return args[0];
-    }
-
-    System.err.println("Usage: java -jar t2i_client.jar <path_to_config.yaml>");
-    System.exit(1);
-
-    return "";
-  }
 }

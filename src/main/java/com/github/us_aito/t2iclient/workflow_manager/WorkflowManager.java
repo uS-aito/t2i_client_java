@@ -44,10 +44,13 @@ public class WorkflowManager {
     this.httpClient = httpClient;
   }
 
+  public String buildPromptBody(String clientId, Map<String, Object> workflowData) throws IOException {
+    return objectMapper.writeValueAsString(new Workflow(clientId, workflowData));
+  }
+
   public String sendPrompt(String serverAddress, String clientId, Map<String, Object> workflowData) throws IOException, InterruptedException {
 
-    Workflow workflow = new Workflow(clientId, workflowData);
-    String jsonBody = objectMapper.writeValueAsString(workflow);
+    String jsonBody = buildPromptBody(clientId, workflowData);
 
     HttpRequest httpRequest = HttpRequest.newBuilder(URI.create("http://" + serverAddress).resolve("/prompt"))
       .header("Content-Type", "application/json")
