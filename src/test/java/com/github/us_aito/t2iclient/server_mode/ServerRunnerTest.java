@@ -158,20 +158,6 @@ class ServerRunnerTest {
         verify(mockReceiver, never()).receiveOne();
     }
 
-    // --- 起動時 S3 ヘルスチェック失敗で S3_ERROR ---
-
-    @Test
-    void run_s3HealthCheckFails_returnsS3Error() throws Exception {
-        ServerRunner runner = newRunner();
-
-        doNothing().when(mockReceiver).healthCheck();
-        doThrow(new RuntimeException("S3 auth failed")).when(mockSink).healthCheck();
-
-        ServerExitCode code = runner.run(FAKE_ARGS);
-
-        assertEquals(ServerExitCode.S3_ERROR, code);
-    }
-
     // --- ComfyUI 接続失敗で COMFYUI_ERROR ---
 
     @Test

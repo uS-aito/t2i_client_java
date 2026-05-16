@@ -69,13 +69,6 @@ public final class ServerRunner {
         }
 
         try {
-            sink.healthCheck();
-        } catch (Exception e) {
-            log.error("S3 ヘルスチェック失敗: {}", e.getMessage());
-            return ServerExitCode.S3_ERROR;
-        }
-
-        try {
             executor.connect(null);
         } catch (ComfyUiJobExecutor.WebSocketConnectException e) {
             log.error("ComfyUI WebSocket 接続失敗: {}", e.getMessage());
