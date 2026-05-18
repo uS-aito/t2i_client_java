@@ -120,6 +120,10 @@ public final class ComfyUiJobExecutor implements AutoCloseable {
             byte[] bytes = workflowManager.fetchImage(COMFYUI_ADDRESS, filename, imageType, subFolder);
             sink.put(objectKey, bytes);
             log.info("S3 アップロード完了: {}", objectKey);
+            CompletableFuture<ExecutionResult> rf = executionResultFuture;
+            if (rf != null) {
+                rf.complete(ExecutionResult.SUCCESS);
+            }
         } catch (Exception e) {
             log.error("S3 アップロード失敗: {}", e.getMessage());
             CompletableFuture<ExecutionResult> rf = executionResultFuture;
@@ -187,6 +191,7 @@ public final class ComfyUiJobExecutor implements AutoCloseable {
 
             switch (type) {
                 case "executed" -> {
+                    log.info("WebSocket executed 受信: promptId={}, tracked={}", promptId, tracked);
                     if (tracked != null && tracked.equals(promptId)) {
                         JsonNode images = root.path("data").path("output").path("images");
                         String msgId = currentMessageId;
@@ -199,12 +204,17 @@ public final class ComfyUiJobExecutor implements AutoCloseable {
                                 image.path("subfolder").asText("")
                             );
                         }
+                    } else {
+                        log.warn("executed: prompt_id 不一致 (tracked={}, received={})", tracked, promptId);
                     }
                 }
                 case "execution_success" -> {
+                    log.info("WebSocket execution_success 受信: promptId={}, tracked={}", promptId, tracked);
                     if (tracked != null && tracked.equals(promptId)) {
                         CompletableFuture<Void> f = jobFuture;
                         if (f != null) f.complete(null);
+                    } else {
+                        log.warn("execution_success: prompt_id 不一致 (tracked={}, received={})", tracked, promptId);
                     }
                 }
                 case "execution_error" -> {
