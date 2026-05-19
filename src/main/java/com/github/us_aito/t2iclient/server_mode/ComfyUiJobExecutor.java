@@ -3,12 +3,15 @@ package com.github.us_aito.t2iclient.server_mode;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.github.us_aito.t2iclient.workflow_manager.WorkflowManager;
 import lombok.extern.slf4j.Slf4j;
 
+import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.WebSocket;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicReference;
@@ -23,8 +26,11 @@ public final class ComfyUiJobExecutor implements AutoCloseable {
     private final S3Destination destination;
     private final HttpClient wsHttpClient;
 
+    private static final ObjectMapper BODY_MAPPER = new ObjectMapper();
+
     private final AtomicReference<WebSocket> currentWebSocket = new AtomicReference<>();
     private volatile CompletableFuture<ExecutionResult> executionResultFuture;
+    private volatile String connectedClientId;
 
     private final JobDispatchListener dispatchListener = new JobDispatchListener();
 
@@ -43,7 +49,10 @@ public final class ComfyUiJobExecutor implements AutoCloseable {
     }
 
     public void connect(String clientId) {
-        String id = clientId != null ? clientId : "";
+        String id = (clientId != null && !clientId.isEmpty())
+            ? clientId
+            : UUID.randomUUID().toString();
+        this.connectedClientId = id;
         URI uri = URI.create("ws://" + COMFYUI_ADDRESS + "/ws?clientId=" + id);
         int[] delaysMs = {1000, 2000, 4000};
 
@@ -74,7 +83,8 @@ public final class ComfyUiJobExecutor implements AutoCloseable {
         CompletableFuture<Void> executionFuture = new CompletableFuture<>();
         String promptId;
         try {
-            promptId = workflowManager.sendPrompt(COMFYUI_ADDRESS, jobMessage.body());
+            String body = injectClientId(jobMessage.body(), connectedClientId);
+            promptId = workflowManager.sendPrompt(COMFYUI_ADDRESS, body);
             log.info("ComfyUI 投入: SQS MessageId={}, prompt_id={}", jobMessage.messageId(), promptId);
         } catch (Exception e) {
             log.error("ComfyUI /prompt 送信失敗: {}", e.getMessage());
@@ -131,6 +141,12 @@ public final class ComfyUiJobExecutor implements AutoCloseable {
                 rf.complete(ExecutionResult.FAILURE_S3);
             }
         }
+    }
+
+    private String injectClientId(String rawBody, String clientId) throws IOException {
+        ObjectNode root = (ObjectNode) BODY_MAPPER.readTree(rawBody);
+        root.put("client_id", clientId);
+        return BODY_MAPPER.writeValueAsString(root);
     }
 
     private String buildObjectKey(String messageId, String subFolder, String filename) {
