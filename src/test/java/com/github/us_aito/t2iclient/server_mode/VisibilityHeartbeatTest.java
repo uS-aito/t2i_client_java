@@ -28,14 +28,25 @@ class VisibilityHeartbeatTest {
         VisibilityHeartbeat heartbeat = new VisibilityHeartbeat(mockReceiver, 100, 60);
 
         heartbeat.start("receipt-002");
-        Thread.sleep(150);
+
+        // 少なくとも 1 回 changeVisibility が登録されるまで決定論的に待つ（CI 環境差を吸収）
+        verify(mockReceiver, timeout(2000).atLeastOnce())
+            .changeVisibility("receipt-002", 60);
+
         heartbeat.stop();
 
-        int countAtStop = Mockito.mockingDetails(mockReceiver).getInvocations().size();
+        // cancel(false) は実行中タスクを中断しないので、in-flight タスクの登録完了を待つ
         Thread.sleep(200);
+
+        int countAtStop = Mockito.mockingDetails(mockReceiver).getInvocations().size();
+
+        // stop が効いていなければ period=100ms で複数回呼ばれるだけの時間を待つ
+        Thread.sleep(500);
+
         int countAfterStop = Mockito.mockingDetails(mockReceiver).getInvocations().size();
 
-        assertEquals(countAtStop, countAfterStop);
+        assertEquals(countAtStop, countAfterStop,
+            "stop() 後は changeVisibility が追加で呼ばれてはならない");
     }
 
     @Test

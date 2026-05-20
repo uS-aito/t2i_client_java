@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
+import software.amazon.awssdk.services.sqs.model.SqsException;
 
 import java.util.Optional;
 
@@ -178,5 +179,107 @@ class ServerRunnerTest {
         ServerExitCode code = runner.run(FAKE_ARGS);
 
         assertEquals(ServerExitCode.COMFYUI_ERROR, code);
+    }
+
+    // --- 初回 receiveOne が空でドレイン終了 ---
+
+    @Test
+    void run_emptyOnFirstReceive_drainsAndExits() throws Exception {
+        ServerRunner runner = newRunner();
+
+        doNothing().when(mockReceiver).healthCheck();
+        doNothing().when(mockExecutor).connect(any());
+
+        when(mockReceiver.receiveOne()).thenReturn(Optional.empty());
+
+        ServerExitCode code = runner.run(FAKE_ARGS);
+
+        assertEquals(ServerExitCode.SUCCESS, code);
+        verify(mockReceiver, times(1)).receiveOne();
+        verify(mockReceiver, never()).delete(any());
+        verify(mockExecutor, never()).execute(any());
+    }
+
+    // --- 複数件処理 → 空でドレイン終了 ---
+
+    @Test
+    void run_multipleJobsThenEmpty_processesAllThenExits() throws Exception {
+        JobMessage job1 = job("m1");
+        JobMessage job2 = job("m2");
+        ServerRunner runner = newRunner();
+
+        doNothing().when(mockReceiver).healthCheck();
+        doNothing().when(mockExecutor).connect(any());
+
+        when(mockReceiver.receiveOne())
+            .thenReturn(Optional.of(job1))
+            .thenReturn(Optional.of(job2))
+            .thenReturn(Optional.empty());
+        when(mockExecutor.execute(job1)).thenReturn(ComfyUiJobExecutor.ExecutionResult.SUCCESS);
+        when(mockExecutor.execute(job2)).thenReturn(ComfyUiJobExecutor.ExecutionResult.SUCCESS);
+
+        ServerExitCode code = runner.run(FAKE_ARGS);
+
+        assertEquals(ServerExitCode.SUCCESS, code);
+        verify(mockReceiver).delete("receipt-m1");
+        verify(mockReceiver).delete("receipt-m2");
+        verify(mockExecutor, times(2)).execute(any());
+    }
+
+    // --- 受信時 SqsException でループ脱出して SUCCESS ---
+
+    @Test
+    void run_sqsExceptionDuringReceive_exitsLoopWithSuccess() throws Exception {
+        ServerRunner runner = newRunner();
+
+        doNothing().when(mockReceiver).healthCheck();
+        doNothing().when(mockExecutor).connect(any());
+
+        SqsException sqsErr = (SqsException) SqsException.builder().message("transient").build();
+        when(mockReceiver.receiveOne()).thenThrow(sqsErr);
+
+        ServerExitCode code = runner.run(FAKE_ARGS);
+
+        assertEquals(ServerExitCode.SUCCESS, code);
+        verify(mockReceiver, never()).delete(any());
+    }
+
+    // --- 正常終了時に heartbeat / executor / receiver の close が呼ばれる ---
+
+    @Test
+    void run_closesResourcesOnNormalExit() throws Exception {
+        ServerRunner runner = newRunner();
+
+        doNothing().when(mockReceiver).healthCheck();
+        doNothing().when(mockExecutor).connect(any());
+
+        when(mockReceiver.receiveOne()).thenReturn(Optional.empty());
+
+        ServerExitCode code = runner.run(FAKE_ARGS);
+
+        assertEquals(ServerExitCode.SUCCESS, code);
+        verify(mockHeartbeat).close();
+        verify(mockExecutor).close();
+        verify(mockReceiver).close();
+    }
+
+    // --- heartbeat.close() で例外が出ても後続の close は呼ばれ SUCCESS ---
+
+    @Test
+    void run_heartbeatCloseFails_stillExitsSuccess() throws Exception {
+        ServerRunner runner = newRunner();
+
+        doNothing().when(mockReceiver).healthCheck();
+        doNothing().when(mockExecutor).connect(any());
+
+        when(mockReceiver.receiveOne()).thenReturn(Optional.empty());
+        doThrow(new RuntimeException("heartbeat close fail")).when(mockHeartbeat).close();
+
+        ServerExitCode code = runner.run(FAKE_ARGS);
+
+        assertEquals(ServerExitCode.SUCCESS, code);
+        verify(mockHeartbeat).close();
+        verify(mockExecutor).close();
+        verify(mockReceiver).close();
     }
 }
