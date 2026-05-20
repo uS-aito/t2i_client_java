@@ -89,7 +89,7 @@ public final class ServerRunner {
                     continue;
                 }
                 JobMessage job = jobOpt.get();
-                log.info("SQS メッセージ受信: messageId={}, bodySize={}", job.messageId(), job.body().length());
+                log.info("SQS メッセージ受信: messageId={}, comfyuiPayloadSize={}", job.messageId(), job.body().length());
 
                 heartbeat.start(job.receiptHandle());
                 ComfyUiJobExecutor.ExecutionResult result;

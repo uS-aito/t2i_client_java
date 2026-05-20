@@ -1,19 +1,23 @@
 package com.github.us_aito.t2iclient.client_mode;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.sqs.model.QueueDoesNotExistException;
 import software.amazon.awssdk.services.sqs.model.SqsException;
 
-import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -55,6 +59,7 @@ class ClientRunnerTest {
               server_address: localhost:8188
               client_id: test-client
             workflow_config:
+              project_name: "demo_project"
               workflow_json_path: %s
               image_output_path: /tmp/output
               library_file_path: %s
@@ -108,19 +113,80 @@ class ClientRunnerTest {
     }
 
     @Test
-    void run_publishBodyContainsClientIdAndPrompt() throws Exception {
+    void run_publishBodyContainsNewEnvelopeFields() throws Exception {
         ClientRunner runner = new ClientRunner(mockPublisher);
 
         runner.run(configPath.toString(), QUEUE_URL);
 
-        verify(mockPublisher, atLeastOnce()).publish(argThat(body -> {
-            try {
-                com.fasterxml.jackson.databind.JsonNode root = new ObjectMapper().readTree(body);
-                return root.has("client_id") && root.has("prompt");
-            } catch (Exception e) {
-                return false;
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockPublisher, times(3)).publish(bodyCaptor.capture());
+
+        ObjectMapper mapper = new ObjectMapper();
+        Pattern serialPattern = Pattern.compile("^\\d{8}-\\d{6}$");
+        for (String body : bodyCaptor.getAllValues()) {
+            JsonNode root = mapper.readTree(body);
+            assertEquals("demo_project", root.path("project_name").asText(),
+                "project_name must equal the fixture value");
+            assertTrue(root.path("scene_name").isTextual()
+                    && !root.path("scene_name").asText().isEmpty(),
+                "scene_name must be a non-empty string");
+            assertTrue(serialPattern.matcher(root.path("serial").asText()).matches(),
+                "serial must match yyyyMMdd-HHmmss: " + root.path("serial").asText());
+            assertTrue(root.path("batch_index").isIntegralNumber(),
+                "batch_index must be a JSON integer");
+            JsonNode payload = root.path("comfyui_payload");
+            assertTrue(payload.isObject(), "comfyui_payload must be a JSON object");
+            assertTrue(payload.path("client_id").isTextual(),
+                "comfyui_payload.client_id must be present");
+            assertTrue(payload.path("prompt").isObject(),
+                "comfyui_payload.prompt must be present and an object");
+        }
+    }
+
+    @Test
+    void run_publishUsesSameSerialAcrossAllMessages() throws Exception {
+        ClientRunner runner = new ClientRunner(mockPublisher);
+
+        runner.run(configPath.toString(), QUEUE_URL);
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockPublisher, times(3)).publish(bodyCaptor.capture());
+
+        ObjectMapper mapper = new ObjectMapper();
+        String firstSerial = mapper.readTree(bodyCaptor.getAllValues().get(0)).path("serial").asText();
+        for (String body : bodyCaptor.getAllValues()) {
+            assertEquals(firstSerial, mapper.readTree(body).path("serial").asText(),
+                "all published messages must share the same serial");
+        }
+    }
+
+    @Test
+    void run_batchSizeN_publishesBatchIndex0ToNMinus1PerScene() throws Exception {
+        ClientRunner runner = new ClientRunner(mockPublisher);
+
+        runner.run(configPath.toString(), QUEUE_URL);
+
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(mockPublisher, times(3)).publish(bodyCaptor.capture());
+
+        ObjectMapper mapper = new ObjectMapper();
+        List<Integer> scene1Indices = new ArrayList<>();
+        List<Integer> scene2Indices = new ArrayList<>();
+        for (String body : bodyCaptor.getAllValues()) {
+            JsonNode root = mapper.readTree(body);
+            String sceneName = root.path("scene_name").asText();
+            int batchIndex = root.path("batch_index").asInt();
+            if ("scene1".equals(sceneName)) {
+                scene1Indices.add(batchIndex);
+            } else if ("scene2".equals(sceneName)) {
+                scene2Indices.add(batchIndex);
             }
-        }));
+        }
+
+        assertEquals(List.of(0), scene1Indices,
+            "scene1 (batch_size=1) must publish batch_index=0 only");
+        assertEquals(List.of(0, 1), scene2Indices,
+            "scene2 (batch_size=2) must publish batch_index 0..1 in order");
     }
 
     // --- 3.2: 例外マッピング・終了コード ---

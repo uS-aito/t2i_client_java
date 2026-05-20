@@ -18,7 +18,6 @@ import static org.mockito.Mockito.*;
 
 class ComfyUiJobExecutorTest {
 
-    private static final String VALID_BODY = "{\"client_id\":\"c1\",\"prompt\":{\"1\":{}}}";
     private static final S3Destination DEST = S3Destination.parse("s3://my-bucket/results");
 
     @Mock WorkflowManager mockWorkflowManager;
@@ -26,8 +25,16 @@ class ComfyUiJobExecutorTest {
     @Mock HttpClient mockHttpClient;
     @Mock WebSocket mockWebSocket;
 
+    private static String body(String project, String scene, String serial, int batchIndex) {
+        return "{\"project_name\":\"" + project + "\","
+            + "\"scene_name\":\"" + scene + "\","
+            + "\"serial\":\"" + serial + "\","
+            + "\"batch_index\":" + batchIndex + ","
+            + "\"comfyui_payload\":{\"client_id\":\"c1\",\"prompt\":{\"1\":{}}}}";
+    }
+
     private JobMessage makeJob(String msgId) {
-        return JobMessage.parse(msgId, "receipt-" + msgId, VALID_BODY);
+        return JobMessage.parse(msgId, "receipt-" + msgId, body("proj", "scene1", "20260520-143022", 0));
     }
 
     @BeforeEach
@@ -94,12 +101,13 @@ class ComfyUiJobExecutorTest {
         ComfyUiJobExecutor executor = newExecutor();
 
         // 別スレッドで execute を実行
+        JobMessage job = makeJob("m4");
         CompletableFuture<ComfyUiJobExecutor.ExecutionResult> resultFuture =
-            CompletableFuture.supplyAsync(() -> executor.execute(makeJob("m4"), future));
+            CompletableFuture.supplyAsync(() -> executor.execute(job, future));
 
         // 少し待ってから S3 失敗を含む executed ペイロードを発火
         Thread.sleep(50);
-        executor.handleExecuted("m4", "pid-004", "img.png", "output", "");
+        executor.handleExecuted(job, "pid-004", "img.png", "output", "");
 
         ComfyUiJobExecutor.ExecutionResult result = resultFuture.get();
         assertEquals(ComfyUiJobExecutor.ExecutionResult.FAILURE_S3, result);
@@ -117,5 +125,111 @@ class ComfyUiJobExecutorTest {
         ComfyUiJobExecutor executor = newExecutor();
         assertThrows(ComfyUiJobExecutor.WebSocketConnectException.class, () -> executor.connect("c1"));
         verify(failingBuilder, times(3)).buildAsync(any(URI.class), any(WebSocket.Listener.class));
+    }
+
+    // --- buildObjectKey: 新形式キー組み立て ---
+
+    @Test
+    void buildObjectKey_buildsExpectedFormat_withPrefix() {
+        ComfyUiJobExecutor executor = newExecutor();
+        JobMessage job = JobMessage.parse("msg", "r", body("myproject", "scene1", "20260520-143022", 0));
+
+        String key = executor.buildObjectKey(job, "image.png");
+
+        assertEquals("results/myproject/20260520-143022/scene1_00.png", key);
+    }
+
+    @Test
+    void buildObjectKey_batchIndex_zeroPaddedToTwoDigits() {
+        ComfyUiJobExecutor executor = newExecutor();
+        JobMessage job = JobMessage.parse("msg", "r", body("p", "s", "20260520-143022", 5));
+
+        String key = executor.buildObjectKey(job, "x.png");
+
+        assertEquals("results/p/20260520-143022/s_05.png", key);
+    }
+
+    @Test
+    void buildObjectKey_filenameWithoutExtension_fallsBackToPng() {
+        ComfyUiJobExecutor executor = newExecutor();
+        JobMessage job = JobMessage.parse("msg", "r", body("p", "s", "20260520-143022", 0));
+
+        String key = executor.buildObjectKey(job, "noext");
+
+        assertEquals("results/p/20260520-143022/s_00.png", key);
+    }
+
+    @Test
+    void buildObjectKey_filenameWithTrailingDot_fallsBackToPng() {
+        ComfyUiJobExecutor executor = newExecutor();
+        JobMessage job = JobMessage.parse("msg", "r", body("p", "s", "20260520-143022", 0));
+
+        String key = executor.buildObjectKey(job, "name.");
+
+        assertEquals("results/p/20260520-143022/s_00.png", key);
+    }
+
+    @Test
+    void buildObjectKey_filenameWithWebpExtension_preservesExtension() {
+        ComfyUiJobExecutor executor = newExecutor();
+        JobMessage job = JobMessage.parse("msg", "r", body("p", "s", "20260520-143022", 0));
+
+        String key = executor.buildObjectKey(job, "img.webp");
+
+        assertEquals("results/p/20260520-143022/s_00.webp", key);
+    }
+
+    @Test
+    void buildObjectKey_withoutPrefix_omitsPrefixSegment() {
+        S3Destination destNoPrefix = S3Destination.parse("s3://my-bucket");
+        ComfyUiJobExecutor executor =
+            new ComfyUiJobExecutor(mockWorkflowManager, mockS3Sink, destNoPrefix, mockHttpClient);
+        JobMessage job = JobMessage.parse("msg", "r", body("p", "s", "20260520-143022", 0));
+
+        String key = executor.buildObjectKey(job, "x.png");
+
+        assertEquals("p/20260520-143022/s_00.png", key);
+    }
+
+    // --- buildObjectKey: sanitize 二重適用 (defense-in-depth) ---
+
+    @Test
+    void buildObjectKey_sceneNameWithPathEscape_isSanitizedAgainOnServer() {
+        ComfyUiJobExecutor executor = newExecutor();
+        // Client が万一サニタイズせずに送ったメッセージ。"../escape" の '/' は Server 側で '_' に再置換される。
+        JobMessage job = JobMessage.parse("msg", "r", body("proj", "../escape", "20260520-143022", 0));
+
+        String key = executor.buildObjectKey(job, "x.png");
+
+        // serial までの 2 つの '/' を除き、scene 部分にパス区切りが含まれないことを確認
+        assertEquals("results/proj/20260520-143022/.._escape_00.png", key);
+        // serial フォルダ以降にさらに '/' が増えていないこと
+        String afterSerial = key.substring(key.indexOf("20260520-143022/") + "20260520-143022/".length());
+        assertFalse(afterSerial.contains("/"), "scene 部分にパス区切りが含まれてはいけない: " + afterSerial);
+    }
+
+    @Test
+    void buildObjectKey_projectAndSceneWithUnsafeChars_areSanitized() {
+        ComfyUiJobExecutor executor = newExecutor();
+        // Server 側 sanitize 二重適用により、空白・記号は '_' に置換される。
+        JobMessage job = JobMessage.parse("msg", "r", body("p:roj", "sc ene*1", "20260520-143022", 0));
+
+        String key = executor.buildObjectKey(job, "x.png");
+
+        assertEquals("results/p_roj/20260520-143022/sc_ene_1_00.png", key);
+    }
+
+    // --- handleExecuted: subfolder を無視する ---
+
+    @Test
+    void handleExecuted_ignoresSubfolderInKey() throws Exception {
+        when(mockWorkflowManager.fetchImage(anyString(), anyString(), anyString(), anyString()))
+            .thenReturn(new byte[]{1, 2, 3});
+        ComfyUiJobExecutor executor = newExecutor();
+        JobMessage job = JobMessage.parse("msg", "r", body("p", "s", "20260520-143022", 0));
+
+        executor.handleExecuted(job, "pid", "out.png", "output", "nested/sub");
+
+        verify(mockS3Sink).put(eq("results/p/20260520-143022/s_00.png"), any());
     }
 }
