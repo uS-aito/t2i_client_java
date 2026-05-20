@@ -3,6 +3,7 @@ package com.github.us_aito.t2iclient.server_mode;
 import com.github.us_aito.t2iclient.cli.AppArgs;
 import com.github.us_aito.t2iclient.workflow_manager.WorkflowManager;
 import lombok.extern.slf4j.Slf4j;
+import software.amazon.awssdk.services.sqs.model.SqsException;
 
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -82,37 +83,68 @@ public final class ServerRunner {
 
         log.info("サーバーモード起動: queueUrl={}, s3={}", appArgs.sqsQueueUrl(), appArgs.s3DestinationUri());
 
-        while (!shutdownRequested.get()) {
-            try {
-                Optional<JobMessage> jobOpt = receiver.receiveOne();
-                if (jobOpt.isEmpty()) {
+        boolean drained = false;
+        try {
+            while (!shutdownRequested.get()) {
+                Optional<JobMessage> jobOpt;
+                try {
+                    jobOpt = receiver.receiveOne();
+                } catch (JobMessage.ParseException e) {
+                    log.error("メッセージのパース失敗（非削除・スキップ）: {}", e.getMessage());
                     continue;
+                } catch (SqsException e) {
+                    log.error("SQS 受信でエラー発生、サーバーモードを停止します: {}", e.getMessage());
+                    break;
                 }
+
+                if (jobOpt.isEmpty()) {
+                    log.info("SQS キューが空のため処理を終了します");
+                    drained = true;
+                    break;
+                }
+
                 JobMessage job = jobOpt.get();
                 log.info("SQS メッセージ受信: messageId={}, comfyuiPayloadSize={}", job.messageId(), job.body().length());
 
-                heartbeat.start(job.receiptHandle());
-                ComfyUiJobExecutor.ExecutionResult result;
                 try {
-                    result = executor.execute(job);
-                } finally {
-                    heartbeat.stop();
-                }
+                    heartbeat.start(job.receiptHandle());
+                    ComfyUiJobExecutor.ExecutionResult result;
+                    try {
+                        result = executor.execute(job);
+                    } finally {
+                        heartbeat.stop();
+                    }
 
-                if (result == ComfyUiJobExecutor.ExecutionResult.SUCCESS) {
-                    receiver.delete(job.receiptHandle());
-                    log.info("ジョブ完了・メッセージ削除: messageId={}", job.messageId());
-                } else {
-                    log.warn("ジョブ失敗（メッセージ非削除）: messageId={}, result={}", job.messageId(), result);
+                    if (result == ComfyUiJobExecutor.ExecutionResult.SUCCESS) {
+                        receiver.delete(job.receiptHandle());
+                        log.info("ジョブ完了・メッセージ削除: messageId={}", job.messageId());
+                    } else {
+                        log.warn("ジョブ失敗（メッセージ非削除）: messageId={}, result={}", job.messageId(), result);
+                    }
+                } catch (Exception e) {
+                    log.error("ジョブ処理でエラー発生（非削除・継続）: messageId={}, error={}",
+                        job.messageId(), e.getMessage());
                 }
-            } catch (JobMessage.ParseException e) {
-                log.error("メッセージのパース失敗（非削除）: {}", e.getMessage());
-            } catch (Exception e) {
-                log.error("受信ループでエラー発生: {}", e.getMessage());
             }
+        } finally {
+            closeQuietly("VisibilityHeartbeat", heartbeat);
+            closeQuietly("ComfyUiJobExecutor", executor);
+            closeQuietly("SqsJobReceiver", receiver);
         }
 
+        if (drained) {
+            log.info("SQS の全メッセージを処理しました");
+        }
         log.info("サーバーモード正常停止");
         return ServerExitCode.SUCCESS;
+    }
+
+    private static void closeQuietly(String label, AutoCloseable c) {
+        if (c == null) return;
+        try {
+            c.close();
+        } catch (Exception e) {
+            log.warn("{} の close に失敗: {}", label, e.getMessage());
+        }
     }
 }
