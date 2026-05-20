@@ -31,7 +31,8 @@ class WorkflowPatcherTest {
             3,  // negativePromptNodeId
             4,  // positivePromptNodeId
             5,  // environmentPromptNodeId
-            new DefaultPrompts(null, null, null, null, null)
+            new DefaultPrompts(null, null, null, null, null),
+            null  // projectName
         );
     }
 

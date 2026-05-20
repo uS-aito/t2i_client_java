@@ -3,6 +3,8 @@ package com.github.us_aito.t2iclient.client_mode;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.us_aito.t2iclient.common.S3KeySanitizer;
+import com.github.us_aito.t2iclient.common.SerialGenerator;
 import com.github.us_aito.t2iclient.config_loader.Config;
 import com.github.us_aito.t2iclient.config_loader.ConfigLoader;
 import com.github.us_aito.t2iclient.config_loader.DefaultPrompts;
@@ -39,14 +41,18 @@ public final class ClientRunner {
         public int numeric() { return code; }
     }
 
+    private static final String DEFAULT_PROJECT_NAME = "no_title";
+
     private final SqsPromptPublisher publisherOverride;
+    private final SqsJobMessageBuilder messageBuilder;
 
     public ClientRunner() {
-        this.publisherOverride = null;
+        this(null);
     }
 
     ClientRunner(SqsPromptPublisher publisher) {
         this.publisherOverride = publisher;
+        this.messageBuilder = new SqsJobMessageBuilder();
     }
 
     public ExitCode run(String configPath, String sqsQueueUrl) {
@@ -65,6 +71,16 @@ public final class ClientRunner {
             ObjectMapper objectMapper = new ObjectMapper();
             Random random = new Random();
             DefaultPrompts defaults = config.workflowConfig().defaultPrompts();
+
+            String serial = SerialGenerator.generateNow();
+            String rawProjectName = config.workflowConfig().projectName() != null
+                ? config.workflowConfig().projectName()
+                : DEFAULT_PROJECT_NAME;
+            String projectName = S3KeySanitizer.sanitize(rawProjectName);
+            if (!rawProjectName.equals(projectName)) {
+                log.info("project_name sanitized: {} -> {}", rawProjectName, projectName);
+            }
+            log.info("Client mode serial assigned: serial={}, project_name={}", serial, projectName);
 
             publisher.healthCheck();
 
@@ -86,10 +102,17 @@ public final class ClientRunner {
                     ? scene.batchSize()
                     : (defaults != null && defaults.batchSize() != null ? defaults.batchSize() : 1);
 
+                String rawSceneName = scene.name();
+                String sceneName = S3KeySanitizer.sanitize(rawSceneName);
+                if (rawSceneName == null || !rawSceneName.equals(sceneName)) {
+                    log.info("scene_name sanitized: {} -> {}", rawSceneName, sceneName);
+                }
+
                 List<String> prompts = PromptGenerator.generatePrompts(positive, library, batchSize);
                 int promptNumber = 0;
                 for (String prompt : prompts) {
                     promptNumber++;
+                    int batchIndex = promptNumber - 1;
                     String fullPrompt = basePositive != null && !basePositive.isEmpty()
                         ? String.join(", ", basePositive, prompt)
                         : prompt;
@@ -105,11 +128,17 @@ public final class ClientRunner {
                     Map<String, Object> workflowData = objectMapper.convertValue(
                         workflow, new TypeReference<>() {}
                     );
-                    String body = workflowManager.buildPromptBody(
+                    String innerBody = workflowManager.buildPromptBody(
                         config.comfyuiConfig().clientId(), workflowData
                     );
-                    String messageId = publisher.publish(body);
-                    log.info("Published: scene={}, prompt={}/{}, messageId={}", scene.name(), promptNumber, batchSize, messageId);
+                    String envelope = messageBuilder.build(
+                        projectName, sceneName, serial, batchIndex, innerBody
+                    );
+                    String messageId = publisher.publish(envelope);
+                    log.info(
+                        "Published: scene={}, project={}, serial={}, batchIndex={}, prompt={}/{}, messageId={}",
+                        sceneName, projectName, serial, batchIndex, promptNumber, batchSize, messageId
+                    );
                     totalPublished++;
                 }
             }

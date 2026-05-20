@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.github.us_aito.t2iclient.common.S3KeySanitizer;
 import com.github.us_aito.t2iclient.workflow_manager.WorkflowManager;
 import lombok.extern.slf4j.Slf4j;
 
@@ -90,7 +91,7 @@ public final class ComfyUiJobExecutor implements AutoCloseable {
             log.error("ComfyUI /prompt 送信失敗: {}", e.getMessage());
             return ExecutionResult.FAILURE_COMFYUI;
         }
-        dispatchListener.setCurrentJob(jobMessage.messageId(), promptId, executionFuture);
+        dispatchListener.setCurrentJob(jobMessage, promptId, executionFuture);
         return awaitResult(executionFuture);
     }
 
@@ -124,8 +125,8 @@ public final class ComfyUiJobExecutor implements AutoCloseable {
         return resultFuture.join();
     }
 
-    void handleExecuted(String messageId, String promptId, String filename, String imageType, String subFolder) {
-        String objectKey = buildObjectKey(messageId, subFolder, filename);
+    void handleExecuted(JobMessage job, String promptId, String filename, String imageType, String subFolder) {
+        String objectKey = buildObjectKey(job, filename);
         try {
             byte[] bytes = workflowManager.fetchImage(COMFYUI_ADDRESS, filename, imageType, subFolder);
             sink.put(objectKey, bytes);
@@ -149,11 +150,25 @@ public final class ComfyUiJobExecutor implements AutoCloseable {
         return BODY_MAPPER.writeValueAsString(root);
     }
 
-    private String buildObjectKey(String messageId, String subFolder, String filename) {
-        String relative = (subFolder == null || subFolder.isEmpty())
-            ? messageId + "/" + filename
-            : messageId + "/" + subFolder + "/" + filename;
+    String buildObjectKey(JobMessage job, String filename) {
+        String project = S3KeySanitizer.sanitize(job.projectName());
+        String scene = S3KeySanitizer.sanitize(job.sceneName());
+        String ext = extractExtension(filename);
+        String relative = project
+            + "/" + job.serial()
+            + "/" + scene + "_" + String.format("%02d", job.batchIndex()) + ext;
         return destination.buildKey(relative);
+    }
+
+    private static String extractExtension(String filename) {
+        if (filename == null) {
+            return ".png";
+        }
+        int dot = filename.lastIndexOf('.');
+        if (dot < 0 || dot == filename.length() - 1) {
+            return ".png";
+        }
+        return filename.substring(dot);
     }
 
     @Override
@@ -174,13 +189,13 @@ public final class ComfyUiJobExecutor implements AutoCloseable {
 
     private class JobDispatchListener implements WebSocket.Listener {
         private static final ObjectMapper MAPPER = new ObjectMapper();
-        private volatile String currentMessageId;
+        private volatile JobMessage currentJob;
         private volatile String trackingPromptId;
         private volatile CompletableFuture<Void> jobFuture;
         private final StringBuilder buffer = new StringBuilder();
 
-        void setCurrentJob(String messageId, String promptId, CompletableFuture<Void> future) {
-            this.currentMessageId = messageId;
+        void setCurrentJob(JobMessage job, String promptId, CompletableFuture<Void> future) {
+            this.currentJob = job;
             this.trackingPromptId = promptId;
             this.jobFuture = future;
         }
@@ -210,10 +225,14 @@ public final class ComfyUiJobExecutor implements AutoCloseable {
                     log.info("WebSocket executed 受信: promptId={}, tracked={}", promptId, tracked);
                     if (tracked != null && tracked.equals(promptId)) {
                         JsonNode images = root.path("data").path("output").path("images");
-                        String msgId = currentMessageId;
-                        for (JsonNode image : images) {
+                        JobMessage job = currentJob;
+                        if (images.isArray() && images.size() > 0) {
+                            if (images.size() > 1) {
+                                log.warn("executed: images 配列に複数要素 (size={}) — 先頭要素のみ使用", images.size());
+                            }
+                            JsonNode image = images.get(0);
                             handleExecuted(
-                                msgId,
+                                job,
                                 promptId,
                                 image.path("filename").asText(""),
                                 image.path("type").asText(""),

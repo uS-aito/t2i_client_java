@@ -14,7 +14,13 @@ import static org.mockito.Mockito.*;
 
 class ServerRunnerTest {
 
-    private static final String VALID_BODY = "{\"client_id\":\"c1\",\"prompt\":{\"1\":{}}}";
+    private static final String VALID_BODY = "{"
+        + "\"project_name\":\"demo_project\","
+        + "\"scene_name\":\"scene1\","
+        + "\"serial\":\"20260520-143022\","
+        + "\"batch_index\":0,"
+        + "\"comfyui_payload\":{\"client_id\":\"c1\",\"prompt\":{\"1\":{}}}"
+        + "}";
     private static final AppArgs FAKE_ARGS = new AppArgs(
         AppArgs.AppMode.SERVER, null,
         "https://sqs.ap-northeast-1.amazonaws.com/123/q",
