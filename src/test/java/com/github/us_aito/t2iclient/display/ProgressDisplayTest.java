@@ -3,6 +3,8 @@ package com.github.us_aito.t2iclient.display;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.nio.charset.StandardCharsets;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -15,7 +17,7 @@ class ProgressDisplayTest {
 
     @BeforeEach
     void setUp() {
-        display = new ProgressDisplay();
+        display = new ProgressDisplay(StandardCharsets.UTF_8);
     }
 
     // --- startScene() のリセット検証 ---
