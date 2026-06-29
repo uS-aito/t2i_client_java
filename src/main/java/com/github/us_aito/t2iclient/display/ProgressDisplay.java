@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.LoggerContext;
 import org.slf4j.LoggerFactory;
 
+import java.nio.charset.Charset;
 import java.time.Instant;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -17,6 +18,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class ProgressDisplay {
 
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(ProgressDisplay.class);
+
+    // バーグリフ（構築時に確定、不変）
+    final String barFilled;
+    final String barEmpty;
+
+    // テスト/明示注入用（package-private）
+    ProgressDisplay(Charset outputCharset) {
+        String[] glyphs = resolveBarGlyphs(outputCharset);
+        this.barFilled = glyphs[0];
+        this.barEmpty = glyphs[1];
+    }
+
+    // 既定コンストラクタ: System.out の実効文字セットを使用
+    public ProgressDisplay() {
+        this(System.out.charset());
+    }
 
     // 静的情報（起動時に1回セット）
     volatile String configFileName;
@@ -290,7 +307,7 @@ public final class ProgressDisplay {
     String renderProgressBar(int completed, int total, int width) {
         int filled = (total > 0) ? (int) Math.round((double) completed / total * width) : 0;
         filled = Math.max(0, Math.min(filled, width));
-        return "\u2588".repeat(filled) + "\u2591".repeat(width - filled);
+        return barFilled.repeat(filled) + barEmpty.repeat(width - filled);
     }
 
     /**
@@ -374,6 +391,22 @@ public final class ProgressDisplay {
      */
     String buildResultsLine(String lastFilename, int totalImages) {
         return String.format("%s  (total: %d)", nvl(lastFilename), totalImages);
+    }
+
+    /**
+     * 出力文字セットに応じて使用するバーグリフを解決する。
+     * Unicode ブロック文字をエンコードできない場合は ASCII フォールバックを返す。
+     *
+     * @param cs 出力先の文字セット（null の場合はフォールバック）
+     * @return {"█", "░"} または {"#", "."}
+     */
+    static String[] resolveBarGlyphs(Charset cs) {
+        try {
+            if (cs != null && cs.newEncoder().canEncode('█') && cs.newEncoder().canEncode('░')) {
+                return new String[]{"█", "░"};
+            }
+        } catch (Exception ignored) {}
+        return new String[]{"#", "."};
     }
 
     /**
