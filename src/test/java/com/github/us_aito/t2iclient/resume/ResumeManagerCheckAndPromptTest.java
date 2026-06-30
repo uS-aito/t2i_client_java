@@ -39,20 +39,20 @@ class ResumeManagerCheckAndPromptTest {
 
     private List<Scene> buildMatchingScenes() {
         return List.of(
-            new Scene("sunset_beach", "A beautiful sunset", "sunset with <tree>", "blurry", "tropical", 1),
-            new Scene("mountain_lake", null, "A mountain lake", "overexposed", null, 1)
+            new Scene("sunset_beach", "A beautiful sunset", "sunset with <tree>", "blurry", null, "tropical", 1),
+            new Scene("mountain_lake", null, "A mountain lake", "overexposed", null, null, 1)
         );
     }
 
     private DefaultPrompts buildMatchingDefaultPrompts() {
-        return new DefaultPrompts("masterpiece", "environment", "positive", "blurry", 1);
+        return new DefaultPrompts("masterpiece", "environment", "positive", "blurry", null, 1);
     }
 
     private ResumeState buildMatchingState(int nextSceneIndex) {
-        DefaultPromptsSnapshot dp = new DefaultPromptsSnapshot("masterpiece", "positive", "blurry", "environment");
+        DefaultPromptsSnapshot dp = new DefaultPromptsSnapshot("masterpiece", "positive", "blurry", null, "environment");
         List<SceneSnapshot> scenes = List.of(
-            new SceneSnapshot("sunset_beach", "A beautiful sunset", "sunset with <tree>", "blurry", "tropical"),
-            new SceneSnapshot("mountain_lake", null, "A mountain lake", "overexposed", null)
+            new SceneSnapshot("sunset_beach", "A beautiful sunset", "sunset with <tree>", "blurry", null, "tropical"),
+            new SceneSnapshot("mountain_lake", null, "A mountain lake", "overexposed", null, null)
         );
         return new ResumeState(1, "/path/to/config.yaml", "2026-03-21T10:30:15", dp, scenes, nextSceneIndex);
     }
@@ -141,11 +141,11 @@ class ResumeManagerCheckAndPromptTest {
         StubResumeManager manager = new StubResumeManager(""); // Enter = 最初から実行
         Path resumePath = tempDir.resolve("config.resume.json");
         // シーン名が異なる不整合state
-        DefaultPromptsSnapshot dp = new DefaultPromptsSnapshot("masterpiece", "positive", "blurry", "environment");
+        DefaultPromptsSnapshot dp = new DefaultPromptsSnapshot("masterpiece", "positive", "blurry", null, "environment");
         ResumeState mismatchState = new ResumeState(
             1, "/path/to/config.yaml", "2026-03-21T10:30:15",
             dp,
-            List.of(new SceneSnapshot("different_scene", null, null, null, null)),
+            List.of(new SceneSnapshot("different_scene", null, null, null, null, null)),
             0
         );
         manager.save(mismatchState, resumePath);
@@ -162,10 +162,10 @@ class ResumeManagerCheckAndPromptTest {
         StubResumeManager manager = new StubResumeManager(""); // Enter = 最初から実行
         Path resumePath = tempDir.resolve("config.resume.json");
         // default_promptsが異なる不整合state
-        DefaultPromptsSnapshot differentDp = new DefaultPromptsSnapshot("CHANGED", "positive", "blurry", "environment");
+        DefaultPromptsSnapshot differentDp = new DefaultPromptsSnapshot("CHANGED", "positive", "blurry", null, "environment");
         List<SceneSnapshot> scenes = List.of(
-            new SceneSnapshot("sunset_beach", "A beautiful sunset", "sunset with <tree>", "blurry", "tropical"),
-            new SceneSnapshot("mountain_lake", null, "A mountain lake", "overexposed", null)
+            new SceneSnapshot("sunset_beach", "A beautiful sunset", "sunset with <tree>", "blurry", null, "tropical"),
+            new SceneSnapshot("mountain_lake", null, "A mountain lake", "overexposed", null, null)
         );
         ResumeState mismatchState = new ResumeState(1, "/path/to/config.yaml", "2026-03-21T10:30:15", differentDp, scenes, 0);
         manager.save(mismatchState, resumePath);

@@ -16,6 +16,7 @@ class SceneSnapshotTest {
             "A beautiful sunset at the beach",
             "sunset with <tree> trees",
             "blurry, low quality",
+            null,
             "tropical, warm"
         );
 
@@ -31,7 +32,7 @@ class SceneSnapshotTest {
 
     @Test
     void JSONフィールド名がキャメルケースで出力されること() throws Exception {
-        var snapshot = new SceneSnapshot("scene1", "base", "pos", "neg", "env");
+        var snapshot = new SceneSnapshot("scene1", "base", "pos", "neg", null, "env");
 
         String json = mapper.writeValueAsString(snapshot);
 
@@ -44,7 +45,7 @@ class SceneSnapshotTest {
 
     @Test
     void nullフィールドがデシリアライズ後もnullであること() throws Exception {
-        var snapshot = new SceneSnapshot("mountain_lake", null, "A serene lake with <weather>", "overexposed", null);
+        var snapshot = new SceneSnapshot("mountain_lake", null, "A serene lake with <weather>", "overexposed", null, null);
 
         String json = mapper.writeValueAsString(snapshot);
         SceneSnapshot restored = mapper.readValue(json, SceneSnapshot.class);
@@ -71,7 +72,7 @@ class SceneSnapshotTest {
     @Test
     void Sceneレコードと同一のnullセマンティクスを持つこと() throws Exception {
         // Scene.java の nullable フィールドと同じ 4 フィールドを保持し batch_size は含まない
-        var snapshot = new SceneSnapshot("test", null, null, null, null);
+        var snapshot = new SceneSnapshot("test", null, null, null, null, null);
 
         String json = mapper.writeValueAsString(snapshot);
 
@@ -81,8 +82,8 @@ class SceneSnapshotTest {
 
     @Test
     void イミュータブルなレコードとして同値性が成立すること() {
-        var a = new SceneSnapshot("beach", "base", "pos", "neg", "env");
-        var b = new SceneSnapshot("beach", "base", "pos", "neg", "env");
+        var a = new SceneSnapshot("beach", "base", "pos", "neg", null, "env");
+        var b = new SceneSnapshot("beach", "base", "pos", "neg", null, "env");
 
         assertEquals(a, b);
     }

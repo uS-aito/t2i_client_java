@@ -7,6 +7,7 @@ public record Scene(
   @JsonProperty("base_positive_prompt") String basePositivePrompt,
   @JsonProperty("positive_prompt") String positivePrompt,
   @JsonProperty("negative_prompt") String negativePrompt,
+  @JsonProperty("base_negative_prompt") String baseNegativePrompt,
   @JsonProperty("environment_prompt") String environmentPrompt,
   @JsonProperty("batch_size") Integer batchSize
 ) {}
