@@ -31,19 +31,19 @@ class ResumeManagerValidateTest {
     }
 
     private SceneSnapshot snapshot(String name, String base, String positive, String negative, String env) {
-        return new SceneSnapshot(name, base, positive, negative, env);
+        return new SceneSnapshot(name, base, positive, negative, null, env);
     }
 
     private Scene scene(String name, String base, String positive, String negative, String env) {
-        return new Scene(name, base, positive, negative, env, null);
+        return new Scene(name, base, positive, negative, null, env, null);
     }
 
     private DefaultPromptsSnapshot dpSnapshot(String base, String positive, String negative, String env) {
-        return new DefaultPromptsSnapshot(base, positive, negative, env);
+        return new DefaultPromptsSnapshot(base, positive, negative, null, env);
     }
 
     private DefaultPrompts dp(String base, String positive, String negative, String env) {
-        return new DefaultPrompts(base, env, positive, negative, null);
+        return new DefaultPrompts(base, env, positive, negative, null, null);
     }
 
     // ----------------------------------------
@@ -159,26 +159,32 @@ class ResumeManagerValidateTest {
         return Stream.of(
                 Arguments.of(
                         "base_positive_prompt",
-                        new SceneSnapshot("scene1", "original_base", "pos", "neg", "env"),
-                        new Scene("scene1", "changed_base", "pos", "neg", "env", null),
+                        new SceneSnapshot("scene1", "original_base", "pos", "neg", null, "env"),
+                        new Scene("scene1", "changed_base", "pos", "neg", null, "env", null),
                         "base_positive_prompt"
                 ),
                 Arguments.of(
+                        "base_negative_prompt",
+                        new SceneSnapshot("scene1", "base", "pos", "neg", "original_base_neg", "env"),
+                        new Scene("scene1", "base", "pos", "neg", "changed_base_neg", "env", null),
+                        "base_negative_prompt"
+                ),
+                Arguments.of(
                         "positive_prompt",
-                        new SceneSnapshot("scene1", "base", "original_pos", "neg", "env"),
-                        new Scene("scene1", "base", "changed_pos", "neg", "env", null),
+                        new SceneSnapshot("scene1", "base", "original_pos", "neg", null, "env"),
+                        new Scene("scene1", "base", "changed_pos", "neg", null, "env", null),
                         "positive_prompt"
                 ),
                 Arguments.of(
                         "negative_prompt",
-                        new SceneSnapshot("scene1", "base", "pos", "original_neg", "env"),
-                        new Scene("scene1", "base", "pos", "changed_neg", "env", null),
+                        new SceneSnapshot("scene1", "base", "pos", "original_neg", null, "env"),
+                        new Scene("scene1", "base", "pos", "changed_neg", null, "env", null),
                         "negative_prompt"
                 ),
                 Arguments.of(
                         "environment_prompt",
-                        new SceneSnapshot("scene1", "base", "pos", "neg", "original_env"),
-                        new Scene("scene1", "base", "pos", "neg", "changed_env", null),
+                        new SceneSnapshot("scene1", "base", "pos", "neg", null, "original_env"),
+                        new Scene("scene1", "base", "pos", "neg", null, "changed_env", null),
                         "environment_prompt"
                 )
         );
@@ -264,26 +270,32 @@ class ResumeManagerValidateTest {
         return Stream.of(
                 Arguments.of(
                         "base_positive_prompt",
-                        new DefaultPromptsSnapshot("original_base", "pos", "neg", "env"),
-                        new DefaultPrompts("changed_base", "env", "pos", "neg", null),
+                        new DefaultPromptsSnapshot("original_base", "pos", "neg", null, "env"),
+                        new DefaultPrompts("changed_base", "env", "pos", "neg", null, null),
                         "base_positive_prompt"
                 ),
                 Arguments.of(
+                        "base_negative_prompt",
+                        new DefaultPromptsSnapshot("base", "pos", "neg", "original_base_neg", "env"),
+                        new DefaultPrompts("base", "env", "pos", "neg", "changed_base_neg", null),
+                        "base_negative_prompt"
+                ),
+                Arguments.of(
                         "positive_prompt",
-                        new DefaultPromptsSnapshot("base", "original_pos", "neg", "env"),
-                        new DefaultPrompts("base", "env", "changed_pos", "neg", null),
+                        new DefaultPromptsSnapshot("base", "original_pos", "neg", null, "env"),
+                        new DefaultPrompts("base", "env", "changed_pos", "neg", null, null),
                         "positive_prompt"
                 ),
                 Arguments.of(
                         "negative_prompt",
-                        new DefaultPromptsSnapshot("base", "pos", "original_neg", "env"),
-                        new DefaultPrompts("base", "env", "pos", "changed_neg", null),
+                        new DefaultPromptsSnapshot("base", "pos", "original_neg", null, "env"),
+                        new DefaultPrompts("base", "env", "pos", "changed_neg", null, null),
                         "negative_prompt"
                 ),
                 Arguments.of(
                         "environment_prompt",
-                        new DefaultPromptsSnapshot("base", "pos", "neg", "original_env"),
-                        new DefaultPrompts("base", "changed_env", "pos", "neg", null),
+                        new DefaultPromptsSnapshot("base", "pos", "neg", null, "original_env"),
+                        new DefaultPrompts("base", "changed_env", "pos", "neg", null, null),
                         "environment_prompt"
                 )
         );

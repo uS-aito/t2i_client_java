@@ -125,8 +125,8 @@ class ResumeManagerFileIOTest {
             1,
             "/cfg.yaml",
             "2026-03-21T10:00:00",
-            new DefaultPromptsSnapshot(null, null, null, null),
-            List.of(new SceneSnapshot("scene1", null, "positive", null, null)),
+            new DefaultPromptsSnapshot(null, null, null, null, null),
+            List.of(new SceneSnapshot("scene1", null, "positive", null, null, null)),
             0
         );
 
@@ -180,11 +180,12 @@ class ResumeManagerFileIOTest {
             "masterpiece, best quality",
             "positive_prompt",
             "blurry, low quality",
+            null,
             "environment_prompt"
         );
         List<SceneSnapshot> scenes = List.of(
-            new SceneSnapshot("sunset_beach", "A beautiful sunset", "sunset with <tree>", "blurry", "tropical"),
-            new SceneSnapshot("mountain_lake", null, "A mountain lake", "overexposed", null)
+            new SceneSnapshot("sunset_beach", "A beautiful sunset", "sunset with <tree>", "blurry", null, "tropical"),
+            new SceneSnapshot("mountain_lake", null, "A mountain lake", "overexposed", null, null)
         );
         return new ResumeState(1, "/path/to/config.yaml", "2026-03-21T10:30:15", defaultPrompts, scenes, 2);
     }

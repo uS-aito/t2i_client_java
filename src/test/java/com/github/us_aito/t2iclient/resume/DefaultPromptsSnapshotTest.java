@@ -15,6 +15,7 @@ class DefaultPromptsSnapshotTest {
             "masterpiece, best quality",
             "positive prompt text",
             "blurry, low quality",
+            null,
             "tropical environment"
         );
 
@@ -29,7 +30,7 @@ class DefaultPromptsSnapshotTest {
 
     @Test
     void JSONフィールド名がキャメルケースで出力されること() throws Exception {
-        var snapshot = new DefaultPromptsSnapshot("base", "pos", "neg", "env");
+        var snapshot = new DefaultPromptsSnapshot("base", "pos", "neg", null, "env");
 
         String json = mapper.writeValueAsString(snapshot);
 
@@ -41,7 +42,7 @@ class DefaultPromptsSnapshotTest {
 
     @Test
     void batchSizeフィールドが含まれないこと() throws Exception {
-        var snapshot = new DefaultPromptsSnapshot("base", "pos", "neg", "env");
+        var snapshot = new DefaultPromptsSnapshot("base", "pos", "neg", null, "env");
 
         String json = mapper.writeValueAsString(snapshot);
 
@@ -51,7 +52,7 @@ class DefaultPromptsSnapshotTest {
 
     @Test
     void nullフィールドがデシリアライズ後もnullであること() throws Exception {
-        var snapshot = new DefaultPromptsSnapshot(null, null, null, null);
+        var snapshot = new DefaultPromptsSnapshot(null, null, null, null, null);
 
         String json = mapper.writeValueAsString(snapshot);
         DefaultPromptsSnapshot restored = mapper.readValue(json, DefaultPromptsSnapshot.class);
@@ -76,8 +77,8 @@ class DefaultPromptsSnapshotTest {
 
     @Test
     void イミュータブルなレコードとして同値性が成立すること() {
-        var a = new DefaultPromptsSnapshot("base", "pos", "neg", "env");
-        var b = new DefaultPromptsSnapshot("base", "pos", "neg", "env");
+        var a = new DefaultPromptsSnapshot("base", "pos", "neg", null, "env");
+        var b = new DefaultPromptsSnapshot("base", "pos", "neg", null, "env");
 
         assertEquals(a, b);
     }

@@ -10,6 +10,7 @@ import com.github.us_aito.t2iclient.config_loader.ConfigLoader;
 import com.github.us_aito.t2iclient.config_loader.DefaultPrompts;
 import com.github.us_aito.t2iclient.config_loader.Scene;
 import com.github.us_aito.t2iclient.library_loader.LibraryLoader;
+import com.github.us_aito.t2iclient.prompt_generator.PromptComposer;
 import com.github.us_aito.t2iclient.prompt_generator.PromptGenerator;
 import com.github.us_aito.t2iclient.prompt_generator.WorkflowPatcher;
 import com.github.us_aito.t2iclient.workflow_loader.WorkflowLoader;
@@ -95,6 +96,10 @@ public final class ClientRunner {
                 String negative = scene.negativePrompt() != null
                     ? scene.negativePrompt()
                     : (defaults != null ? defaults.negativePrompt() : "");
+                String baseNegative = scene.baseNegativePrompt() != null
+                    ? scene.baseNegativePrompt()
+                    : (defaults != null ? defaults.baseNegativePrompt() : "");
+                String composedNegative = PromptComposer.composeNegative(baseNegative, negative);
                 String environment = scene.environmentPrompt() != null
                     ? scene.environmentPrompt()
                     : (defaults != null ? defaults.environmentPrompt() : "");
@@ -121,7 +126,7 @@ public final class ClientRunner {
                         workflow,
                         config.workflowConfig(),
                         fullPrompt,
-                        negative,
+                        composedNegative,
                         environment,
                         seed
                     );

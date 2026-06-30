@@ -29,6 +29,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.github.us_aito.t2iclient.cli.AppArgs;
 import com.github.us_aito.t2iclient.client_mode.ClientRunner;
+import com.github.us_aito.t2iclient.prompt_generator.PromptComposer;
 import com.github.us_aito.t2iclient.prompt_generator.WorkflowPatcher;
 import com.github.us_aito.t2iclient.config_loader.Config;
 import com.github.us_aito.t2iclient.config_loader.ConfigLoader;
@@ -133,8 +134,9 @@ public class Main {
                 dp.basePositivePrompt(),
                 dp.positivePrompt(),
                 dp.negativePrompt(),
+                dp.baseNegativePrompt(),
                 dp.environmentPrompt())
-            : new DefaultPromptsSnapshot(null, null, null, null);
+            : new DefaultPromptsSnapshot(null, null, null, null, null);
 
         List<SceneSnapshot> sceneSnapshots = config.scenes().stream()
             .map(s -> new SceneSnapshot(
@@ -142,6 +144,7 @@ public class Main {
                 s.basePositivePrompt(),
                 s.positivePrompt(),
                 s.negativePrompt(),
+                s.baseNegativePrompt(),
                 s.environmentPrompt()))
             .toList();
 
@@ -270,6 +273,7 @@ public class Main {
         String environmentPrompt = scene.environmentPrompt() != null ? scene.environmentPrompt() : config.workflowConfig().defaultPrompts().environmentPrompt();
         String positivePrompt = scene.positivePrompt() != null ? scene.positivePrompt() : config.workflowConfig().defaultPrompts().positivePrompt();
         String negativePrompt = scene.negativePrompt() != null ? scene.negativePrompt() : config.workflowConfig().defaultPrompts().negativePrompt();
+        String baseNegativePrompt = scene.baseNegativePrompt() != null ? scene.baseNegativePrompt() : config.workflowConfig().defaultPrompts().baseNegativePrompt();
         Integer batchSize = scene.batchSize() != null ? scene.batchSize() : config.workflowConfig().defaultPrompts().batchSize();
         sceneName.set(scene.name());
         display.startScene(scene.name(), displaySceneIndex, batchSize);
@@ -287,7 +291,7 @@ public class Main {
             workflow,
             config.workflowConfig(),
             fullPrompt,
-            negativePrompt,
+            PromptComposer.composeNegative(baseNegativePrompt, negativePrompt),
             environmentPrompt,
             random.nextLong(0, 1125899906842624L)
           );

@@ -17,6 +17,7 @@ workflow_config:
     environment_prompt: "environment_prompt" # 環境プロンプト(室内、屋外、昼、夜など)
     positive_prompt: "positive_prompt"
     negative_prompt: "negative_prompt"
+    base_negative_prompt: "worst quality, low quality" # optional; 各モデルで共通のネガティブ語彙（worst quality, low quality等）
     batch_size: 10
 
 scenes:
@@ -25,6 +26,7 @@ scenes:
     base_positive_prompt: "A beautiful sunset at the beach"
     positive_prompt: "A beautiful sunset at the beach with <tree> trees and vibrant colors."
     negative_prompt: "blurry, low quality"
+    base_negative_prompt: "worst quality, low quality, text, watermark" # optional; モデル共通のネガティブプロンプト
     environment_prompt: "tropical, warm"
     batch_size: 1
   # デフォルトのプロンプトを使用する例

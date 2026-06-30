@@ -99,6 +99,9 @@ public class ResumeManager {
                 if (!Objects.equals(saved.basePositivePrompt(), current.basePositivePrompt())) {
                     warnings.add("シーン[" + saved.name() + "]のbase_positive_promptが変更されました");
                 }
+                if (!Objects.equals(saved.baseNegativePrompt(), current.baseNegativePrompt())) {
+                    warnings.add("シーン[" + saved.name() + "]のbase_negative_promptが変更されました");
+                }
                 if (!Objects.equals(saved.positivePrompt(), current.positivePrompt())) {
                     warnings.add("シーン[" + saved.name() + "]のpositive_promptが変更されました");
                 }
@@ -125,6 +128,9 @@ public class ResumeManager {
         if (savedDp != null && currentDefaultPrompts != null) {
             if (!Objects.equals(savedDp.basePositivePrompt(), currentDefaultPrompts.basePositivePrompt())) {
                 warnings.add("default_prompts.base_positive_promptが変更されました");
+            }
+            if (!Objects.equals(savedDp.baseNegativePrompt(), currentDefaultPrompts.baseNegativePrompt())) {
+                warnings.add("default_prompts.base_negative_promptが変更されました");
             }
             if (!Objects.equals(savedDp.positivePrompt(), currentDefaultPrompts.positivePrompt())) {
                 warnings.add("default_prompts.positive_promptが変更されました");

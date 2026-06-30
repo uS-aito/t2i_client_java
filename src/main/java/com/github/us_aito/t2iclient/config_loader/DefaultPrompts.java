@@ -7,5 +7,6 @@ public record DefaultPrompts(
   @JsonProperty("environment_prompt") String environmentPrompt,
   @JsonProperty("positive_prompt") String positivePrompt,
   @JsonProperty("negative_prompt") String negativePrompt,
+  @JsonProperty("base_negative_prompt") String baseNegativePrompt,
   @JsonProperty("batch_size") Integer batchSize
 ) {}
